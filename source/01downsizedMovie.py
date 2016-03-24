@@ -8,23 +8,6 @@ import os
 from PyQt4 import QtGui, QtCore
 import sys
 
-### store the folders
-class multipleDirectories( QtGui.QFileDialog ):
-
-    def __init__(self, parent = None):
-
-        super(multipleDirectories, self).__init__( parent )
-
-        # self.setOption(self.DontUseNativeDialog, True)
-        self.setFileMode(self.DirectoryOnly)
-
-        for view in self.findChildren((QtGui.QListView, QtGui.QTreeView)):
-            if isinstance(view.model(), QtGui.QFileSystemModel):
-                view.setSelectionMode(QtGui.QAbstractItemView.MultiSelection)
-
-        print( view )
-
-
 class GUI(QtGui.QWidget):
     
 	def __init__(self):
