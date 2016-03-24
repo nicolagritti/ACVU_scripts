@@ -8,6 +8,7 @@ import os
 from PyQt4 import QtGui, QtCore
 import sys
 
+
 class GUI(QtGui.QWidget):
     
 	def __init__(self):
