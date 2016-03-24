@@ -1,156 +1,328 @@
 import glob
 from generalFunctions import *
-from tifffile import *
+# from tifffile import *
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import pickle
 import os
+from PyQt4 import QtGui, QtCore
+import sys
+
+### store the folders
+class multipleDirectories( QtGui.QFileDialog ):
+
+    def __init__(self, parent = None):
+
+        super(multipleDirectories, self).__init__( parent )
+
+        # self.setOption(self.DontUseNativeDialog, True)
+        self.setFileMode(self.DirectoryOnly)
+
+        for view in self.findChildren((QtGui.QListView, QtGui.QTreeView)):
+            if isinstance(view.model(), QtGui.QFileSystemModel):
+                view.setSelectionMode(QtGui.QAbstractItemView.MultiSelection)
+
+        print( view )
 
 
-def makeMovie( path, worm, hatchingTidx, magnification = 60, channels = ['CoolLED'], scaleFactor = 4 ):
-	'''
-		this function builds a movie from downsized images of a certain worm.
+class GUI(QtGui.QWidget):
+    
+	def __init__(self):
+
+		super(GUI, self).__init__()
+
+		self.setWindowTitle( 'Movie making' )
+
+		self.pathDial = 'Y:\\Images'
+
+		self.initUI()
+
+	#-----------------------------------------------------------------------------------------------
+	# INITIALIZATION OF THE WINDOW - DEFINE AND PLACE ALL THE WIDGETS
+	#-----------------------------------------------------------------------------------------------
+
+	def initUI(self):
+
+		# SET THE GEOMETRY
+
+		mainWindow = QtGui.QGridLayout()
+		mainWindow.setSpacing(15)
+
+		self.setLayout(mainWindow)
+
+		# DEFINE ALL WIDGETS AND BUTTONS
+
+		loadExpBtn = QtGui.QPushButton('Load Experiment Folder')
+		self.expLbl = QtGui.QLineEdit('')
+
+		loadWormsBtn = QtGui.QLabel('Selected Worms')
+		self.wormsLbl = QtGui.QLineEdit('')
+
+		hatchingLbl = QtGui.QLabel('Insert hatching timepoint')
+		self.hatchingTp = QtGui.QLineEdit('')
+
+		magnificationLbl = QtGui.QLabel('Insert Magnification')
+		self.magnification = QtGui.QComboBox(self)
+		self.magnification.addItem('40')
+		self.magnification.addItem('60')
+
+		compressionLbl = QtGui.QLabel('Insert Desired Compression')
+		self.compression = QtGui.QComboBox(self)
+		for i in [2,4,8,16]:
+		    self.compression.addItem(str(i))
+
+		movieLbl = QtGui.QLabel('Select Desired Channels')
+		self.channelLED = QtGui.QCheckBox('CoolLED')
+		self.channel488 = QtGui.QCheckBox('488nm')
+		self.channel561 = QtGui.QCheckBox('561nm')
+
+		makeMovieBtn = QtGui.QPushButton('Create the Movie!')
+
+		# PLACE ALL THE WIDGET ACCORDING TO THE GRIDS
+
+		mainWindow.addWidget(loadExpBtn,0,0)
+		mainWindow.addWidget(self.expLbl,0,1)
+
+		mainWindow.addWidget(loadWormsBtn,1,0)
+		mainWindow.addWidget(self.wormsLbl,1,1)
+
+		mainWindow.addWidget(hatchingLbl,2,0)
+		mainWindow.addWidget(self.hatchingTp,2,1)
+
+		mainWindow.addWidget(magnificationLbl,3,0)
+		mainWindow.addWidget(self.magnification,3,1)
+
+		mainWindow.addWidget(compressionLbl,4,0)
+		mainWindow.addWidget(self.compression,4,1)
+
+		mainWindow.addWidget(movieLbl,5,0)
+		mainWindow.addWidget(self.channelLED,5,1)
+		mainWindow.addWidget(self.channel488,6,1)
+		mainWindow.addWidget(self.channel561,7,1)
+
+		mainWindow.addWidget(makeMovieBtn,8,0,1,2)
+
+		self.show()
+
+		# BIND BUTTONS TO FUNCTIONS
+
+		loadExpBtn.clicked.connect(self.selectExp)
+		makeMovieBtn.clicked.connect(self.createMovie)
+
+	#-----------------------------------------------------------------------------------------------
+	# FORMATTING THE WINDOW
+	#-----------------------------------------------------------------------------------------------
+
+	def center(self):
+	    
+		qr = self.frameGeometry()
+		cp = QtGui.QDesktopWidget().availableGeometry().center()
+		qr.moveCenter(cp)
+		self.move(qr.topLeft())
+	    
+	#-----------------------------------------------------------------------------------------------
+	# BUTTON FUNCTIONS
+	#-----------------------------------------------------------------------------------------------
+
+	def selectExp(self):
+
+		### store the folder
+		self.pathDial = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder', 'Y:\\Images')
+		self.exp = self.pathDial.split('\\')[-1]
+		self.expLbl.setText(self.exp)
+
+		### update the worms
+		wormNames = [ i for i in os.listdir(self.pathDial) if len(i) == 3]
+		wormNames.sort()
+		wormList = ''
+		for i in wormNames:
+			wormList += i + ', '
+		self.wormsLbl.setText(wormList)
+
+	def saveData(self):
+
+		save_data_frame( self.gpDF, self.path, self.worm + '_02gonadPos.pickle' )
+
+	#-----------------------------------------------------------------------------------------------
+	# UTILS
+	#-----------------------------------------------------------------------------------------------
+
+	def createMovie(self):
 		
-		Inputs:
-		
-			- path, worm: folder with the (original) images
-		
-			- hatching time: index of the first image after hatching
+		'''
+			this function builds a movie from downsized images of a certain worm.
+			
+			Inputs:
+			
+				- path, worm: folder with the (original) images
+			
+				- hatching time: index of the first image after hatching
 
-			- magnification: objective used (default: 60X)
+				- magnification: objective used (default: 60X)
 
-			- channels: 'LED' for making a moving of transmission images, 
-				'488nm' or '561nm' for fluorescence. default: only 'LED'
-				NB: for 'LED' each frame is the mean projection of each 3D stack, 
-					for '488nm' and '561nm' it's the maximum projection
+				- channels: 'LED' for making a moving of transmission images, 
+					'488nm' or '561nm' for fluorescence. default: only 'LED'
+					NB: for 'LED' each frame is the mean projection of each 3D stack, 
+						for '488nm' and '561nm' it's the maximum projection
 
-			- scaleFactor: downsizing parameter (default: 4)
-		
-	'''
+				- scaleFactor: downsizing parameter (default: 4)
+			
+		'''
 
+		# extract info for creating the movies
 
-	rawImgsPath = os.path.join( path, worm )
-	print(rawImgsPath)
+		path = self.pathDial
 
-	### CREATE PARAM AND TIME PICKLE FILE
-	# create pickle file if it doesn't exist yet
-	if not os.path.isfile( os.path.join( path, worm + '_01params.pickle' ) ):
+		magnification = int( self.magnification.currentText() )
 
-		parDF = create_params( path, worm, magnification, scaleFactor, hatchingTidx )
-		save_data_frame( parDF, path, worm + '_01params.pickle' )
+		scaleFactor = int( self.compression.currentText() )
 
-	else:
+		channels = []
+		if self.channelLED.isChecked():
+			channels.append('CoolLED')
+		if self.channel488.isChecked():
+			channels.append('488nm')
+		if self.channel561.isChecked():
+			channels.append('488nm')
 
-		parDF = load_data_frame( path, worm + '_01params.pickle' )
+		worms = self.wormsLbl.text().replace(' ', '')
+		if worms[-1] == ',':
+			worms = worms[:-1]
+		worms = worms.split(',')
 
-	# print(parDF)
+		hatchingTidxs = self.hatchingTp.text().replace(' ','')
+		if hatchingTidxs[-1] == ',':
+			hatchingTidxs = hatchingTidxs[:-1]
+		hatchingTidxs = [ int(i) for i in hatchingTidxs.split(',') ]
 
-	# extract times in absolute values relative to hatching
-	if not os.path.isfile( os.path.join( path, worm + '_01times.pickle' ) ):
+		print(path,worms,hatchingTidxs,magnification,scaleFactor,channels)
 
-		tDF = create_times( rawImgsPath, zero=hatchingTidx )
-		save_data_frame( tDF, path, worm + '_01times.pickle' )
+		# check if there is a mistake in the wormlist
+		if len(worms) != len(hatchingTidxs):
+			QtGui.QMessageBox.about(self,'Error!','Lengths of hatching times and worms do not match!')
+			return
 
-	else:
+		# create the movie for each worm
+		for val in zip( worms, hatchingTidxs ):
 
-		tDF = load_data_frame( path, worm + '_01times.pickle' )
+			worm = val[0]
+			hatchingTidx = val[1]
 
-	# print(tDF)
+			rawImgsPath = os.path.join( path, worm )
 
-	# create new folder for analyzed images
-	outpath = os.path.join( path, worm + '_analyzedImages' )
-	os.makedirs( outpath, exist_ok = True)	
+			### CREATE PARAM AND TIME PICKLE FILE
+			# create pickle file if it doesn't exist yet
+			if not os.path.isfile( os.path.join( path, worm + '_01params.pickle' ) ):
 
-	### BUILD THE MOVIE FOR EACH OF THE INPUT CHANNELS
+				parDF = create_params( path, worm, magnification, scaleFactor, hatchingTidx )
+				save_data_frame( parDF, path, worm + '_01params.pickle' )
 
-	for channel in channels:
-		
-		### CREATE THE MOVIE WITHOUT TIMESTAMP
+			else:
 
-		continueMakingMovie = not os.path.isfile( os.path.join( outpath, channel + '_movie.tif' ) )
+				parDF = load_data_frame( path, worm + '_01params.pickle' )
+
+			# extract times in absolute values relative to hatching
+			if not os.path.isfile( os.path.join( path, worm + '_01times.pickle' ) ):
+
+				tDF = create_times( rawImgsPath, zero=hatchingTidx )
+				save_data_frame( tDF, path, worm + '_01times.pickle' )
+
+			else:
+
+				tDF = load_data_frame( path, worm + '_01times.pickle' )
+
+			# create new folder for analyzed images
+			outpath = os.path.join( path, worm + '_analyzedImages' )
+			os.makedirs( outpath, exist_ok = True)	
+
+			### BUILD THE MOVIE FOR EACH OF THE INPUT CHANNELS
+
+			for channel in channels:
 				
-		if continueMakingMovie:
+				### CREATE THE MOVIE WITHOUT TIMESTAMP
 
-			# load the file list with all the raw images
-			flist = glob.glob( os.path.join( rawImgsPath,  '*' + channel + '.tif')	)
-			flist.sort()
-			# print(len(flist))
+				continueMakingMovie = not os.path.isfile( os.path.join( outpath, channel + '_movie.tif' ) )
+						
+				if continueMakingMovie:
 
-			# create a blank movie list
-			movieFinal = []
+					# load the file list with all the raw images
+					flist = glob.glob( os.path.join( rawImgsPath,  '*' + channel + '.tif')	)
+					flist.sort()
+					# print(len(flist))
 
-			# minimum and maximum values to optimize the dynamic range of the timeframes
-			_min = 2**16
-			_max = 0
+					# create a blank movie list
+					movieFinal = []
 
-			for idx, f in enumerate( flist ):
-				print(f)
+					# minimum and maximum values to optimize the dynamic range of the timeframes
+					_min = 2**16
+					_max = 0
 
-				# load the Z-stack
-				imgs = load_stack( f )
+					for idx, f in enumerate( flist ):
+						print(f)
 
-				# downsized Z-stack
-				smallimgs = downsizeStack( imgs, scaleFactor )
+						# load the Z-stack
+						imgs = load_stack( f )
 
-				# compute the mean or maximum projection depending on the channel input
-				if channel == 'CoolLED':
-					frame = np.mean(smallimgs,0).astype(np.uint16)
-				else:
-					frame = np.max(smallimgs,0).astype(np.uint16)
+						# downsized Z-stack
+						smallimgs = downsizeStack( imgs, scaleFactor )
 
-				# append the projection to the movie
-				movieFinal.append( frame )
+						# compute the mean or maximum projection depending on the channel input
+						if channel == 'CoolLED':
+							frame = np.mean(smallimgs,0).astype(np.uint16)
+						else:
+							frame = np.max(smallimgs,0).astype(np.uint16)
 
-				# update the minimum and maximum value for brightness and contrast based on previous and current frames of the movie
-				_min = np.min(frame) * ( np.min(frame) < _min ) + _min * ( np.min(frame) >= _min )
-				_max = np.max(frame) * ( np.max(frame) > _max ) + _max * ( np.max(frame) <= _max )
+						# append the projection to the movie
+						movieFinal.append( frame )
 
-			# change b&c
-			movieFinal = ( np.array( movieFinal ) - _min ) / ( _max - _min )
+						# update the minimum and maximum value for brightness and contrast based on previous and current frames of the movie
+						_min = np.min(frame) * ( np.min(frame) < _min ) + _min * ( np.min(frame) >= _min )
+						_max = np.max(frame) * ( np.max(frame) > _max ) + _max * ( np.max(frame) <= _max )
 
-			# convert images to 8 bit
-			movieFinal = ( ( 2**8 - 1. ) * movieFinal  ).astype( np.uint8 )
+					# change b&c
+					movieFinal = ( np.array( movieFinal ) - _min ) / ( _max - _min )
 
-			# save the movie without timestamps
-			imsave( os.path.join( outpath, channel + '_movie.tif' ), np.array( movieFinal ) )
+					# convert images to 8 bit
+					movieFinal = ( ( 2**8 - 1. ) * movieFinal  ).astype( np.uint8 )
 
-		### CREATE AND SAVE THE MOVIE WITH TIMESTAMPS
-		
-		continueMakingMovie = not os.path.isfile( os.path.join( outpath, channel + '_movieWithTime.tif' ) )
+					# save the movie without timestamps
+					imsave( os.path.join( outpath, channel + '_movie.tif' ), np.array( movieFinal ) )
+
+				### CREATE AND SAVE THE MOVIE WITH TIMESTAMPS
 				
-		if continueMakingMovie:
+				continueMakingMovie = not os.path.isfile( os.path.join( outpath, channel + '_movieWithTime.tif' ) )
+						
+				if continueMakingMovie:
 
-			if os.path.isfile( os.path.join( outpath, channel + '_movie.tif' ) ):
-				movieFinal = load_stack( os.path.join( outpath, channel + '_movie.tif' ) )
+					if os.path.isfile( os.path.join( outpath, channel + '_movie.tif' ) ):
+						movieFinal = load_stack( os.path.join( outpath, channel + '_movie.tif' ) )
 
-			movieFinalWithTime = np.zeros( ( len(movieFinal), movieFinal[0].shape[0], movieFinal[0].shape[1] ) ).astype( np.uint8 )
+					movieFinalWithTime = np.zeros( ( len(movieFinal), movieFinal[0].shape[0], movieFinal[0].shape[1] ) ).astype( np.uint8 )
 
-			for idx, img in enumerate( movieFinal ):
+					for idx, img in enumerate( movieFinal ):
 
-				# create the PythonImageLibrary object of the frame to write the time text
-				imgpil = Image.fromarray( movieFinal[idx], 'L' )
+						# create the PythonImageLibrary object of the frame to write the time text
+						imgpil = Image.fromarray( movieFinal[idx], 'L' )
 
-				# write the time
-				font = ImageFont.truetype( "calibri.ttf", 60 )
-				draw = ImageDraw.Draw(imgpil)
-				draw.text((0,0),'%d h' % np.floor( tDF.timesRel[idx] ),fill='white',font=font)
+						# write the time
+						font = ImageFont.truetype( "calibri.ttf", 60 )
+						draw = ImageDraw.Draw(imgpil)
+						draw.text((0,0),'%d h' % np.floor( tDF.timesRel[idx] ),fill='white',font=font)
 
-				movieFinalWithTime[idx] = np.asarray( imgpil )
+						movieFinalWithTime[idx] = np.asarray( imgpil )
 
-			imsave( os.path.join( outpath, channel + '_movieWithTime.tif' ), np.array( movieFinalWithTime ) )
+					imsave( os.path.join( outpath, channel + '_movieWithTime.tif' ), np.array( movieFinalWithTime ) )
 
 
 
 if __name__ == '__main__':
+    
+    app = QtGui.QApplication.instance() # checks if QApplication already exists 
+    if not app: # create QApplication if it doesnt exist 
+        app = QtGui.QApplication( sys.argv )
+    
+    gui = GUI()
+    app.setStyle( "plastique" )
+    # app.installEventFilter(gui)
+    sys.exit( app.exec_() )
 
-	path = 'X:\\Simone\\160129_MCHERRY_HLH2GFP_onHB101'
-
-	worms = [ 'C15', 'C16', 'C17', 'C18', 'C19' ]
-
-	hatchingTidx = [3,1,5,4,8]
-
-	magnification = 60
-
-	for val in zip( worms, hatchingTidx ):
-	    makeMovie( path = path, worm = val[0], hatchingTidx = val[1], 
-	    	magnification = magnification, channels = [ 'CoolLED' ], scaleFactor = 4 )

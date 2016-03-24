@@ -19,7 +19,7 @@ import pickle
 import scipy.interpolate as ip
 import re
 from datetime import datetime
-from skimage.filter import threshold_otsu, rank
+from skimage.filters import threshold_otsu, rank
 from skimage import measure
 from skimage.morphology import remove_small_objects, disk
 from scipy.ndimage import morphology, filters
@@ -48,7 +48,7 @@ def load_stack(filename):
 
 def downsizeStack( stack, scaleFactor ):
 
-	if len(imgs.shape) == 3:
+	if len(stack.shape) == 3:
 	    
 	    smallstack = []
 	    for img in stack:
@@ -60,11 +60,11 @@ def downsizeStack( stack, scaleFactor ):
 
 	    return smallstack
 
-	if len(imgs.shape) == 2:
+	if len(stack.shape) == 2:
 
-		Nbig = imgs.shape[0]
-		Nsmall = imgs.shape[0]/scaleFactor
-		smallimg = ( imgs.reshape([Nsmall, Nbig/Nsmall, Nsmall, Nbig/Nsmall]).mean(3).mean(1) ).astype(np.uint16)
+		Nbig = stack.shape[0]
+		Nsmall = stack.shape[0]/scaleFactor
+		smallimg = ( stack.reshape([Nsmall, Nbig/Nsmall, Nsmall, Nbig/Nsmall]).mean(3).mean(1) ).astype(np.uint16)
 
 		return smallimg
 
