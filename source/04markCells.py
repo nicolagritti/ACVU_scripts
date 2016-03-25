@@ -253,6 +253,10 @@ class GUI(QtGui.QWidget):
         print( 'Loading... ', self.pathDial, tRow.fName )
 
         # load all the available stacks - this is the slowest part of the code!!!
+        try:
+            prevmax = np.max( [ np.max(self.stacks[ch]) for ch in self.channels ] )
+        except:
+            prevmax = 0
         self.stacks = {}
         for ch in self.channels:
             fileName = os.path.join( self.pathDial, tRow.fName + ch + '.tif')
@@ -269,9 +273,15 @@ class GUI(QtGui.QWidget):
             ### extract current cells already labeled
             self.currentCells = extract_current_cell_pos( self.cellPosDF, self.tp.value() )
 
-            self.setBCslidersMinMax()
+            # if the BC bound are different, the BCsliderMinMax will automatically update canvas1. Otherwise, manually update it!
+            newmax = np.max( [ np.max(self.stacks[ch]) for ch in self.channels ] )
 
-        # self.updateTable()
+            if prevmax != newmax:
+                self.setBCslidersMinMax()
+            
+            else:
+                self.updateCanvas1()
+    
         self.updateCanvas2()
 
     def saveData(self):
@@ -472,6 +482,7 @@ class GUI(QtGui.QWidget):
         self.fig1.subplots_adjust(left=0., right=1., top=1., bottom=0.)
 
         # clear cell text and points
+        # print(self.text1,self.points1)
         for text in self.text1:
             text.remove()
         self.text1 = []
@@ -488,6 +499,8 @@ class GUI(QtGui.QWidget):
                 self.text1.append( self.ax1.text( cell.X, cell.Y + 18, cell.cname, color='red', size='medium', alpha=.8,
                         rotation=0 ) )
                 self.points1.append( self.ax1.plot( cell.X, cell.Y, 'o', color='red', alpha = .8, mew = 0 )[0] )
+
+                plt.draw()
 
         # redraw the canvas
         self.canvas1.draw()
@@ -566,7 +579,7 @@ class GUI(QtGui.QWidget):
 
         if whatToChange == 'time':
 
-            # before changinf timepoint, print labeled cells and check if they are OK
+            # before changing timepoint, print labeled cells and check if they are OK
             print( self.currentCells )
 
             # if they are OK (and not going to negative times), change timepoint
