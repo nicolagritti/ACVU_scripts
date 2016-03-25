@@ -117,6 +117,7 @@ class GUI(QtGui.QWidget):
         
         self.setFocus()
 
+        self.initializeCanvas1()
         self.show()
         
         # BIND BUTTONS TO FUNCTIONS
@@ -210,19 +211,16 @@ class GUI(QtGui.QWidget):
         else:
             self.gpDF = create_gonad_pos( self.timesDF )
         
-        # initialize figure
-        self.initializeCanvas1()
-        self.imgplot.set_clim(np.min(self.channels[self.currentChannel]), np.max(self.channels[self.currentChannel]))  
-
         ### set the timepoint to the hatching time
         self.tp.setMinimum(np.min(self.timesDF.tidxRel))
         self.tp.setMaximum(np.max(self.timesDF.tidxRel))
         self.tp.setValue( 0 )
 
         ### update the text of the fileName
-        self.fName.setText(self.timesDF.ix[self.timesDF.tidxRel == 0, 'fName'].values[0])
+        self.fName.setText(self.timesDF.ix[self.timesDF.tidxRel == self.tp.value(), 'fName'].values[0])
 
-        self.updateCanvas1()
+        ### update canvases for the first time
+        self.updateAllCanvas()
         self.setFocus()
 
     def saveData(self):
@@ -326,12 +324,10 @@ class GUI(QtGui.QWidget):
         self.sld2.setValue(np.max(self.channels[self.currentChannel]))
 
     def initializeCanvas1(self):
-        print('intializing canvas1...')
 
         # plot the image
         self.ax1.cla()
-        size = 2048 / self.compression
-        self.imgplot = self.ax1.imshow( np.zeros((size,size)), cmap = 'gray' )
+        self.imgplot = self.ax1.imshow( np.zeros((512,512)), cmap = 'gray' )
         
         # remove the white borders and plot outline and spline
         self.ax1.autoscale(False)
@@ -351,7 +347,6 @@ class GUI(QtGui.QWidget):
         self.setFocus()
         
     def updateCanvas1(self):
-        print('updating canvas 1...')
         
         # plot the image
         self.imgplot.set_data( self.channels[self.currentChannel][self.tp.value() + self.hatchingtidx] )
