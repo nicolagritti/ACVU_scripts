@@ -164,13 +164,6 @@ class GUI(QtGui.QWidget):
     # FORMATTING THE WINDOW
     #-----------------------------------------------------------------------------------------------
 
-    def center(self):
-        
-        qr = self.frameGeometry()
-        cp = QtGui.QDesktopWidget().availableGeometry().center()
-        qr.moveCenter(cp)
-        self.move(qr.topLeft())
-        
     def HLine(self):
         
         toto = QtGui.QFrame()
@@ -178,17 +171,6 @@ class GUI(QtGui.QWidget):
         toto.setFrameShadow(QtGui.QFrame.Sunken)
         return toto
 
-    def VLine(self):
-        
-        toto = QtGui.QFrame()
-        toto.setFrameShape(QtGui.QFrame.VLine)
-        toto.setFrameShadow(QtGui.QFrame.Sunken)
-        return toto
-
-    def heightForWidth(self, width):
-        
-        return width
-    
     #-----------------------------------------------------------------------------------------------
     # BUTTON FUNCTIONS
     #-----------------------------------------------------------------------------------------------
