@@ -14,6 +14,8 @@ import os
 import matplotlib as mpl
 mpl.rcParams['pdf.fonttype'] = 42
 
+### GUI TO BE IMPLEMENTED
+
 def cropImages( path, worm, channels = ['488nm','CoolLED','561nm'], size = 512 ):
 
 	print( path, worm )
