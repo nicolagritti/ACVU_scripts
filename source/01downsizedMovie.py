@@ -49,16 +49,19 @@ class GUI(QtGui.QWidget):
 		self.magnification = QtGui.QComboBox(self)
 		self.magnification.addItem('40')
 		self.magnification.addItem('60')
+		self.magnification.setCurrentIndex(1)
 
 		compressionLbl = QtGui.QLabel('Insert Desired Compression')
 		self.compression = QtGui.QComboBox(self)
 		for i in [2,4,8,16]:
 		    self.compression.addItem(str(i))
+		self.compression.setCurrentIndex(1)
 
 		movieLbl = QtGui.QLabel('Select Desired Channels')
 		self.channelLED = QtGui.QCheckBox('CoolLED')
 		self.channel488 = QtGui.QCheckBox('488nm')
 		self.channel561 = QtGui.QCheckBox('561nm')
+		self.channelLED.setChecked(True)
 
 		makeMovieBtn = QtGui.QPushButton('Create the Movie!')
 
@@ -94,17 +97,6 @@ class GUI(QtGui.QWidget):
 		makeMovieBtn.clicked.connect(self.createMovie)
 
 	#-----------------------------------------------------------------------------------------------
-	# FORMATTING THE WINDOW
-	#-----------------------------------------------------------------------------------------------
-
-	def center(self):
-	    
-		qr = self.frameGeometry()
-		cp = QtGui.QDesktopWidget().availableGeometry().center()
-		qr.moveCenter(cp)
-		self.move(qr.topLeft())
-	    
-	#-----------------------------------------------------------------------------------------------
 	# BUTTON FUNCTIONS
 	#-----------------------------------------------------------------------------------------------
 
@@ -122,14 +114,6 @@ class GUI(QtGui.QWidget):
 		for i in wormNames:
 			wormList += i + ', '
 		self.wormsLbl.setText(wormList)
-
-	def saveData(self):
-
-		save_data_frame( self.gpDF, self.path, self.worm + '_02gonadPos.pickle' )
-
-	#-----------------------------------------------------------------------------------------------
-	# UTILS
-	#-----------------------------------------------------------------------------------------------
 
 	def createMovie(self):
 		
@@ -152,6 +136,10 @@ class GUI(QtGui.QWidget):
 				- scaleFactor: downsizing parameter (default: 4)
 			
 		'''
+		
+		if ( len(self.expLbl.text()) == 0 ) or ( len(self.wormsLbl.text()) == 0 ):
+			QtGui.QMessageBox.about(self,'Error!','No experiment or worms selected!')
+			return
 
 		# extract info for creating the movies
 
@@ -167,7 +155,7 @@ class GUI(QtGui.QWidget):
 		if self.channel488.isChecked():
 			channels.append('488nm')
 		if self.channel561.isChecked():
-			channels.append('488nm')
+			channels.append('561nm')
 
 		worms = self.wormsLbl.text().replace(' ', '')
 		if worms[-1] == ',':
@@ -179,7 +167,7 @@ class GUI(QtGui.QWidget):
 			hatchingTidxs = hatchingTidxs[:-1]
 		hatchingTidxs = [ int(i) for i in hatchingTidxs.split(',') ]
 
-		print(path,worms,hatchingTidxs,magnification,scaleFactor,channels)
+		# print(path,worms,hatchingTidxs,magnification,scaleFactor,channels)
 
 		# check if there is a mistake in the wormlist
 		if len(worms) != len(hatchingTidxs):
