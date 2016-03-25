@@ -235,6 +235,7 @@ class GUI(QtGui.QWidget):
         save_data_frame( self.gpDF, self.path, self.worm + '_02gonadPos.pickle' )
         
     def radio488Clicked(self, enabled):
+        print('radio 488 clicked')
 
         if enabled:
             if '488nm' in self.channels.keys():
@@ -245,6 +246,7 @@ class GUI(QtGui.QWidget):
                 QtGui.QMessageBox.about(self, 'Warning', 'No 488nm channel!')
 
     def radio561Clicked(self, enabled):
+        print('radio 561 clicked')
 
         if enabled:
             if '561nm' in self.channels.keys():
@@ -256,6 +258,7 @@ class GUI(QtGui.QWidget):
                 QtGui.QMessageBox.about(self, 'Warning', 'No 561nm channel!')
 
     def radioCoolLEDClicked(self, enabled):
+        print('radio LED clicked')
 
         if enabled:
             if 'CoolLED' in self.channels.keys():
@@ -313,9 +316,9 @@ class GUI(QtGui.QWidget):
     #-----------------------------------------------------------------------------------------------
 
     def setBCslidersMinMax(self):
-        self.sld1.setMaximum(np.max( [ np.max(i) for i in self.channels[self.currentChannel] ] ) )
+        self.sld1.setMaximum( np.max( [ np.max(self.stacks[ch]) for ch in self.channels ] ) )
         self.sld1.setMinimum(0)
-        self.sld2.setMaximum(np.max( [ np.max(i) for i in self.channels[self.currentChannel] ] ) )
+        self.sld2.setMaximum( np.max( [ np.max(self.stacks[ch]) for ch in self.channels ] ) )
         self.sld2.setMinimum(0)
 
     def initializeCanvas1(self):
@@ -350,7 +353,7 @@ class GUI(QtGui.QWidget):
         self.imgplot.set_data( self.channels[self.currentChannel][self.tp.value() + self.hatchingtidx] )
         
         # change brightness and contrast
-        self.imgplot.set_clim(self.sld1.value(), self.sld2.value())  
+        self.imgplot.set_clim( self.sld1.value(), self.sld2.value() )  
 
         # print gonad position
         gonadPos = extract_pos( self.gpDF.ix[ self.gpDF.tidx == self.tp.value() ].squeeze() ) / self.compression
