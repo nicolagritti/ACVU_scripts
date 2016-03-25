@@ -1,5 +1,4 @@
 
-
 """
 PyQt seam cells analysis GUI
 
@@ -23,6 +22,8 @@ from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends import qt_compat
 import glob
 import pandas as pd
+from time import time
+# from skimage.io import MultiImage
 use_pyside = qt_compat.QT_API == qt_compat.QT_API_PYSIDE
 
 class GUI(QtGui.QWidget):
@@ -137,6 +138,9 @@ class GUI(QtGui.QWidget):
         Col3.addWidget(self.canvas2)
         
         self.setFocus()
+
+        self.initializeCanvas1()
+        self.initializeCanvas2()
         self.show()
         
         # BIND BUTTONS TO FUNCTIONS
@@ -145,9 +149,9 @@ class GUI(QtGui.QWidget):
         saveBtn.clicked.connect(self.saveData)
 
         self.tp.valueChanged.connect(self.loadNewStack)
-        self.sl.valueChanged.connect(self.updateAllCanvas)
-        self.sld1.valueChanged.connect(self.updateAllCanvas)
-        self.sld2.valueChanged.connect(self.updateAllCanvas)
+        self.sl.valueChanged.connect(self.updateCanvas1)
+        self.sld1.valueChanged.connect(self.changeBConCanvas1)
+        self.sld2.valueChanged.connect(self.changeBConCanvas1)
 
         self._488nmBtn.toggled.connect(self.radioClicked)
         self._561nmBtn.toggled.connect(self.radioClicked)
@@ -160,13 +164,6 @@ class GUI(QtGui.QWidget):
     # FORMATTING THE WINDOW
     #-----------------------------------------------------------------------------------------------
 
-    def center(self):
-        
-        qr = self.frameGeometry()
-        cp = QtGui.QDesktopWidget().availableGeometry().center()
-        qr.moveCenter(cp)
-        self.move(qr.topLeft())
-        
     def HLine(self):
         
         toto = QtGui.QFrame()
@@ -174,17 +171,6 @@ class GUI(QtGui.QWidget):
         toto.setFrameShadow(QtGui.QFrame.Sunken)
         return toto
 
-    def VLine(self):
-        
-        toto = QtGui.QFrame()
-        toto.setFrameShape(QtGui.QFrame.VLine)
-        toto.setFrameShadow(QtGui.QFrame.Sunken)
-        return toto
-
-    def heightForWidth(self, width):
-        
-        return width
-    
     #-----------------------------------------------------------------------------------------------
     # BUTTON FUNCTIONS
     #-----------------------------------------------------------------------------------------------
@@ -220,14 +206,7 @@ class GUI(QtGui.QWidget):
 
         ### load all movies (without timestamps, we will add it later on)
         self.LEDmovie = load_stack( os.path.join( self.pathDial, 'CoolLED_movie.tif' ) )
-
-        ### set the timepoint to the hatching time
-        self.tp.setMinimum(np.min(self.timesDF.tidxRel))
-        self.tp.setMaximum(np.max(self.timesDF.tidxRel))
-        self.tp.setValue( 0 )
-
-        ### extract current cells already labeled
-        self.currentCells = extract_current_cell_pos( self.cellPosDF, self.tp.value() )
+        self.imgplot2.set_clim(np.min(self.LEDmovie), np.max(self.LEDmovie))  
 
         # detect available channels
         self.channels = []
@@ -239,13 +218,23 @@ class GUI(QtGui.QWidget):
                 self.channels.append(c)
         self.currentChannel = self.channels[0]
 
+        ### extract current cells already labeled
+        self.currentCells = extract_current_cell_pos( self.cellPosDF, self.tp.value() )
+
+        ### set the timepoint to the hatching time
+        self.tp.setMinimum(np.min(self.timesDF.tidxRel))
+        self.tp.setMaximum(np.max(self.timesDF.tidxRel))
+        self.tp.setValue( np.min( self.gpDF.ix[ pd.notnull( self.gpDF.X ), 'tidx' ] ) )
+
+        ### extract current cells already labeled
+        self.currentCells = extract_current_cell_pos( self.cellPosDF, self.tp.value() )
+
         ### update the text of the fileName
         self.fName.setText( self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value(), 'fName' ].values[0])
         
         self.loadNewStack()
 
         # self.pathDial.show()
-        self.updateAllCanvas()
         self.setFocus()
 
     def loadNewStack(self):
@@ -255,19 +244,22 @@ class GUI(QtGui.QWidget):
 
         print( 'Loading... ', self.pathDial, tRow.fName )
 
-        # load all the available stacks
+        # load all the available stacks - this is the slowest part of the code!!!
         self.stacks = {}
         for ch in self.channels:
             fileName = os.path.join( self.pathDial, tRow.fName + ch + '.tif')
             if os.path.isfile( fileName ):
+                # print(MultiImage('X:\\Simone\\160129_MCHERRY_HLH2GFP_onHB101\\C02_analyzedImages\\Z003_488nm.tif'))
+                # print(fileName, MultiImage( fileName ))
+                # self.stacks[ch] = MultiImage( fileName )
                 self.stacks[ch] = load_stack( fileName )
-
+                
         if len( self.stacks.keys() ) > 0:
             # print(self.stacks.keys(), self.stacksStraight)
-            self.sl.setMaximum(self.stacks[self.currentChannel].shape[0]-1)
+            self.sl.setMaximum(len(self.stacks[self.currentChannel])-1)
 
             self.setBCslidersMinMax()
-        
+
         ### update the text of the fileName
         self.fName.setText( self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value(), 'fName' ].values[0])
 
@@ -309,7 +301,7 @@ class GUI(QtGui.QWidget):
         self.setBCslidersMinMax()
         self.resetBC()
         self.setFocus()
-        self.updateAllCanvas()
+        self.updateCanvas1()
 
     #-----------------------------------------------------------------------------------------------
     # DEFAULT FUNCTION FOR KEY AND MOUSE PRESS ON WINDOW
@@ -390,7 +382,8 @@ class GUI(QtGui.QWidget):
         elif event.key() == QtCore.Qt.Key_Backspace:
             self.currentCells.ix[ idx, 'cname' ] = self.currentCells.ix[ idx, 'cname' ][:-1]
 
-        self.updateCanvas1()
+        if ( event.key() != QtCore.Qt.Key_Left ) and ( event.key() != QtCore.Qt.Key_Right ) and ( event.key() != QtCore.Qt.Key_Up ) and ( event.key() != QtCore.Qt.Key_Down ):
+            self.updateCanvas1()
         self.setFocus()
 
     def onMouseClickOnCanvas1(self, event):
@@ -436,50 +429,77 @@ class GUI(QtGui.QWidget):
     def resetBC(self):
         self.sld1.setValue(np.min(self.stacks[self.currentChannel]))
         self.sld2.setValue(np.max(self.stacks[self.currentChannel]))
-        
-    def updateCanvas1(self):
+
+    def initializeCanvas1(self):
 
         self.fig1.clf()
         self.fig1.subplots_adjust(left=0., right=1., top=1., bottom=0.)
         self.ax1 = self.fig1.add_subplot(111)
         self.canvas1.draw()
 
-        if len( self.stacks.keys() ) == 0:
-            # if no images are found, leave the canvas empty
-            return
-
         # plot the image
         self.ax1.cla()
-        imgplot = self.ax1.imshow( self.stacks[self.currentChannel][self.sl.value()], cmap = 'gray' )
+        self.imgplot1 = self.ax1.imshow( np.zeros((512,512)), cmap = 'gray' )
+        
+        # remove the white borders
+        self.ax1.autoscale(False)
+        self.ax1.axis('Off')
+        self.fig1.subplots_adjust(left=0., right=1., top=1., bottom=0.)
+
+        # plot cell pos and name
+        self.text1 = []
+        self.points1 = []
+
+        # redraw the canvas
+        self.canvas1.draw()
+        self.setFocus()
+        
+    def updateCanvas1(self):
+        print('updating canvas1')
+
+        # plot the image
+        self.imgplot1.set_data( self.stacks[self.currentChannel][self.sl.value()] )
         
         # remove the white borders and plot outline and spline
         self.ax1.autoscale(False)
         self.ax1.axis('Off')
         self.fig1.subplots_adjust(left=0., right=1., top=1., bottom=0.)
 
-        # cell text on the image
+        # clear cell text and points
+        for text in self.text1:
+            text.remove()
+        self.text1 = []
+
+        for points in self.points1:
+            self.ax1.lines.remove(points)
+        self.points1 = []
+
+        # draw cell text and point
         for idx, cell in self.currentCells.iterrows():
 
             if cell.Z == self.sl.value():
 
-                self.ax1.text( cell.X, cell.Y + 18, cell.cname, color='red', size='medium', alpha=.8,
-                        rotation=0 )
-                self.ax1.plot( cell.X, cell.Y, 'o', color='red', alpha = .8, mew = 0 )
+                self.text1.append( self.ax1.text( cell.X, cell.Y + 18, cell.cname, color='red', size='medium', alpha=.8,
+                        rotation=0 ) )
+                self.points1.append( self.ax1.plot( cell.X, cell.Y, 'o', color='red', alpha = .8, mew = 0 )[0] )
 
         # change brightness and contrast
         self.sld1.setValue(np.min([self.sld1.value(),self.sld2.value()]))
         self.sld2.setValue(np.max([self.sld1.value(),self.sld2.value()]))
-        imgplot.set_clim(self.sld1.value(), self.sld2.value())  
 
         # redraw the canvas
         self.canvas1.draw()
         self.setFocus()
 
-    def updateCanvas2(self):
-        
+    def changeBConCanvas1(self):
+
+        self.imgplot1.set_clim(self.sld1.value(), self.sld2.value())  
+
+    def initializeCanvas2(self):
+
         # plot the image
         self.ax2.cla()
-        imgplot = self.ax2.imshow( self.LEDmovie[ self.tp.value() + self.hatchingtidx ], cmap = 'gray' )
+        self.imgplot2 = self.ax2.imshow( np.zeros((512,512)), cmap = 'gray' )
         
         # remove the white borders and plot outline and spline
         self.ax2.autoscale(False)
@@ -487,12 +507,31 @@ class GUI(QtGui.QWidget):
         self.fig2.subplots_adjust(left=0., right=1., top=1., bottom=0.)
 
         # print gonad position
+        gonadPos = [np.nan,np.nan]
+        self.points2, = self.ax2.plot( gonadPos[0], gonadPos[1], 'o', color='red', ms=10, mew=0, alpha=.5, lw = 0 ) 
+
+        # print time
+        self.text2 = self.ax2.text( 5, 25, '--.--', color = 'red' )     
+
+        # redraw the canvas
+        self.canvas2.draw()
+        self.setFocus()
+
+    def updateCanvas2(self):
+        print('updating canvas2')
+        # plot the image
+        self.imgplot2.set_data( self.LEDmovie[ self.tp.value() + self.hatchingtidx ] )
+
+        # print gonad position
         gonadPos = extract_pos( self.gpDF.ix[ self.gpDF.tidx == self.tp.value() ].squeeze() ) / self.compression
-        self.ax2.plot( gonadPos[0], gonadPos[1], 'o', color='red', ms=10, mew=0, alpha=.5, lw = 0 )      
+        if len( gonadPos.shape ) > 0:
+            self.points2.set_xdata( gonadPos[0] ) 
+            self.points2.set_ydata( gonadPos[1] ) 
+            plt.draw()
 
         # print time
         # print(self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value(), 'timesRel' ])
-        self.ax2.text( 5, 25, '%.2f' % self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value(), 'timesRel' ].values[0], color = 'red' )     
+        self.text2.set_text( '%.2f' % self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value(), 'timesRel' ].values[0] )
 
         # redraw the canvas
         self.canvas2.draw()
@@ -532,6 +571,7 @@ class GUI(QtGui.QWidget):
 
             # if they are OK (and not going to negative times), change timepoint
             if self.checkConsistencyCellNames() and ( self.tp.value() + increment ) >= 0 :
+                print('tp changed')
                 self.tp.setValue( self.tp.value() + increment )
 
         if whatToChange == 'space':
@@ -550,4 +590,4 @@ if __name__ == '__main__':
     sys.exit( app.exec_() )
     
 
-
+# print(MultiImage('X:\\Simone\\test\\C01_analyzedImages\\z002_488nm.tif'))
