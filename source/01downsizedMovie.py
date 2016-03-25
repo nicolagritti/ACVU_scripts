@@ -137,7 +137,7 @@ class GUI(QtGui.QWidget):
 			
 		'''
 		
-		if ( len(self.expLbl.text()) == 0 ) or ( len(self.wormsLbl.text()) == 0 ):
+		if ( len(self.expLbl.text()) == 0 ) or ( len(self.wormsLbl.text()) == 0 ) or ( len(self.hatchingTp.text()) == 0 ):
 			QtGui.QMessageBox.about(self,'Error!','No experiment or worms selected!')
 			return
 
