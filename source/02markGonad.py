@@ -117,7 +117,6 @@ class GUI(QtGui.QWidget):
         
         self.setFocus()
 
-        self.initializeCanvas1()
         self.show()
         
         # BIND BUTTONS TO FUNCTIONS
@@ -125,13 +124,13 @@ class GUI(QtGui.QWidget):
         loadBtn.clicked.connect(self.selectWorm)
         saveBtn.clicked.connect(self.saveData)
 
-        self.tp.valueChanged.connect(self.updateAllCanvas)
-        self.sld1.valueChanged.connect(self.updateAllCanvas)
-        self.sld2.valueChanged.connect(self.updateAllCanvas)
+        self.tp.valueChanged.connect(self.updateCanvas1)
+        self.sld1.valueChanged.connect(self.updateCanvas1)
+        self.sld2.valueChanged.connect(self.updateCanvas1)
 
-        self._488nmBtn.toggled.connect(self.radioClicked)
-        self._561nmBtn.toggled.connect(self.radioClicked)
-        self.CoolLEDBtn.toggled.connect(self.radioClicked)
+        self._488nmBtn.toggled.connect(self.radio488Clicked)
+        self._561nmBtn.toggled.connect(self.radio561Clicked)
+        self.CoolLEDBtn.toggled.connect(self.radioCoolLEDClicked)
 
         self.fig1.canvas.mpl_connect('button_press_event',self.onMouseClickOnCanvas1)        
         self.fig1.canvas.mpl_connect('scroll_event',self.wheelEvent)        
@@ -172,7 +171,7 @@ class GUI(QtGui.QWidget):
     def selectWorm(self):
 
         ### store the folders
-        self.pathDial = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder', 'Y:\\Images')
+        self.pathDial = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder', 'C:\\Users\\Nicola\\Dropbox\\PhD\\Codes\\test')#Y:\\Images')
         self.worm = self.pathDial.split("\\")[-1].split('_')[0]
         self.path = os.path.dirname( self.pathDial )
         self.setWindowTitle('Body Length Analysis - ' + self.pathDial)
@@ -194,8 +193,8 @@ class GUI(QtGui.QWidget):
         if os.path.isfile( os.path.join( self.pathDial, 'CoolLED_movie.tif' ) ):
             self.channels['CoolLED'] = load_stack( os.path.join( self.pathDial, 'CoolLED_movie.tif' ) )
 
-        self.currentChannel = list(self.channels.keys())[0]
-        
+        self.currentChannel = 'CoolLED'
+
         ### load parameters and times dataframes
         self.paramsDF = load_data_frame( self.path, self.worm + '_01params.pickle' )
         self.timesDF = load_data_frame( self.path, self.worm + '_01times.pickle' )
@@ -211,51 +210,60 @@ class GUI(QtGui.QWidget):
         else:
             self.gpDF = create_gonad_pos( self.timesDF )
         
+        tp = 0
+
+        ### update the text of the fileName
+        self.fName.setText(self.timesDF.ix[self.timesDF.tidxRel == 0, 'fName'].values[0])
+
+        ### initialize the figure.astype(np.uint8)
+        self.initializeCanvas1()
+
         ### set the timepoint to the hatching time
         self.tp.setMinimum(np.min(self.timesDF.tidxRel))
         self.tp.setMaximum(np.max(self.timesDF.tidxRel))
-        self.tp.setValue( 0 )
 
-        ### update the text of the fileName
-        self.fName.setText(self.timesDF.ix[self.timesDF.tidxRel == self.tp.value(), 'fName'].values[0])
+        if tp != self.tp.value():
+            self.tp.setValue( 0 )
 
-        ### update canvases for the first time
-        self.updateAllCanvas()
+        self.setBCslidersMinMax()   # this updates the canvas, only once!
+        self.CoolLEDBtn.setChecked(True) # this also updates the canvas, only once!
+
         self.setFocus()
 
     def saveData(self):
 
         save_data_frame( self.gpDF, self.path, self.worm + '_02gonadPos.pickle' )
         
-    def updateAllCanvas(self):
+    def radio488Clicked(self, enabled):
 
-        self.updateRadioBtn()
-        self.updateCanvas1()
-        
-    def radioClicked(self):
-
-        if self._488nmBtn.isChecked():
+        if enabled:
             if '488nm' in self.channels.keys():
                 self.currentChannel = '488nm'
+                self.updateCanvas1()
             else:
+                self.CoolLEDBtn.setChecked(True)
                 QtGui.QMessageBox.about(self, 'Warning', 'No 488nm channel!')
 
-        elif self._561nmBtn.isChecked():
+    def radio561Clicked(self, enabled):
+
+        if enabled:
             if '561nm' in self.channels.keys():
                 self.currentChannel = '561nm'
+                self.setFocus()
+                self.updateCanvas1()
             else:
+                self.CoolLEDBtn.setChecked(True)
                 QtGui.QMessageBox.about(self, 'Warning', 'No 561nm channel!')
 
-        elif self.CoolLEDBtn.isChecked():
+    def radioCoolLEDClicked(self, enabled):
+
+        if enabled:
             if 'CoolLED' in self.channels.keys():
                 self.currentChannel = 'CoolLED'
+                self.setFocus()
+                self.updateCanvas1()
             else:
                 QtGui.QMessageBox.about(self, 'Warning', 'No CoolLED channel!')
-
-        self.setBCslidersMinMax()
-        self.resetBC()
-        self.setFocus()
-        self.updateAllCanvas()
 
     #-----------------------------------------------------------------------------------------------
     # DEFAULT FUNCTION FOR KEY AND MOUSE PRESS ON WINDOW
@@ -304,30 +312,19 @@ class GUI(QtGui.QWidget):
     # UTILS
     #-----------------------------------------------------------------------------------------------
 
-    def updateRadioBtn(self):
-        if self.currentChannel == '488nm':
-            self._488nmBtn.setChecked(True)
-        elif self.currentChannel == '561nm':
-            self._561nmBtn.setChecked(True)
-        elif self.currentChannel == 'CoolLED':
-            self.CoolLEDBtn.setChecked(True)
-        self.setFocus()
-
     def setBCslidersMinMax(self):
-        self.sld1.setMaximum(np.max(self.channels[self.currentChannel]))
-        self.sld1.setMinimum(np.min(self.channels[self.currentChannel]))
-        self.sld2.setMaximum(np.max(self.channels[self.currentChannel]))
-        self.sld2.setMinimum(np.min(self.channels[self.currentChannel]))
-
-    def resetBC(self):
-        self.sld1.setValue(np.min(self.channels[self.currentChannel]))
-        self.sld2.setValue(np.max(self.channels[self.currentChannel]))
+        self.sld1.setMaximum(np.max( [ np.max(i) for i in self.channels[self.currentChannel] ] ) )
+        self.sld1.setMinimum(0)
+        self.sld2.setMaximum(np.max( [ np.max(i) for i in self.channels[self.currentChannel] ] ) )
+        self.sld2.setMinimum(0)
 
     def initializeCanvas1(self):
+        print('initializing canvas1... ')
 
         # plot the image
         self.ax1.cla()
-        self.imgplot = self.ax1.imshow( np.zeros((512,512)), cmap = 'gray' )
+        size = 2048 / self.compression
+        self.imgplot = self.ax1.imshow( np.zeros((size,size)), cmap = 'gray' )
         
         # remove the white borders and plot outline and spline
         self.ax1.autoscale(False)
@@ -347,13 +344,12 @@ class GUI(QtGui.QWidget):
         self.setFocus()
         
     def updateCanvas1(self):
+        print('updating canvas1... ')
         
         # plot the image
         self.imgplot.set_data( self.channels[self.currentChannel][self.tp.value() + self.hatchingtidx] )
         
         # change brightness and contrast
-        self.sld1.setValue(np.min([self.sld1.value(),self.sld2.value()]))
-        self.sld2.setValue(np.max([self.sld1.value(),self.sld2.value()]))
         self.imgplot.set_clim(self.sld1.value(), self.sld2.value())  
 
         # print gonad position
