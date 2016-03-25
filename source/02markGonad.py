@@ -32,9 +32,6 @@ class GUI(QtGui.QWidget):
         super(GUI, self).__init__()
         
         self.setWindowTitle( 'Body Length Analysis' )
-        self.side = 'L'
-        self.lbltxt = '"wheel" press: change side, currently %s\n"i" or "u" press: change cell sides'
-        self.seamCellNames = ['a','b','c','1','2','3','4','5','6','t']
         self.initUI()
         
     #-----------------------------------------------------------------------------------------------
@@ -119,6 +116,8 @@ class GUI(QtGui.QWidget):
         Col2.addWidget(self.canvas1)
         
         self.setFocus()
+
+        self.initializeCanvas1()
         self.show()
         
         # BIND BUTTONS TO FUNCTIONS
@@ -323,31 +322,50 @@ class GUI(QtGui.QWidget):
     def resetBC(self):
         self.sld1.setValue(np.min(self.channels[self.currentChannel]))
         self.sld2.setValue(np.max(self.channels[self.currentChannel]))
-        
-    def updateCanvas1(self):
-        
+
+    def initializeCanvas1(self):
+
         # plot the image
         self.ax1.cla()
-        imgplot = self.ax1.imshow( self.channels[self.currentChannel][self.tp.value() + self.hatchingtidx], cmap = 'gray' )
+        self.imgplot = self.ax1.imshow( np.zeros((512,512)), cmap = 'gray' )
         
         # remove the white borders and plot outline and spline
         self.ax1.autoscale(False)
         self.ax1.axis('Off')
         self.fig1.subplots_adjust(left=0., right=1., top=1., bottom=0.)
 
+        # print gonad position
+        gonadPos = [np.nan,np.nan]
+        self.pointsplot, = self.ax1.plot( gonadPos[0], gonadPos[1], 'o', color='red', ms=10, mew=0, alpha=.5, lw = 0 ) 
+
+        # print time
+        # print(self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value(), 'timesRel' ])
+        self.textplot = self.ax1.text( 5, 15, '--.--', color = 'red' )     
+
+        # redraw the canvas
+        self.canvas1.draw()
+        self.setFocus()
+        
+    def updateCanvas1(self):
+        
+        # plot the image
+        self.imgplot.set_data( self.channels[self.currentChannel][self.tp.value() + self.hatchingtidx] )
+        
         # change brightness and contrast
         self.sld1.setValue(np.min([self.sld1.value(),self.sld2.value()]))
         self.sld2.setValue(np.max([self.sld1.value(),self.sld2.value()]))
-        imgplot.set_clim(self.sld1.value(), self.sld2.value())  
+        self.imgplot.set_clim(self.sld1.value(), self.sld2.value())  
 
         # print gonad position
         gonadPos = extract_pos( self.gpDF.ix[ self.gpDF.tidx == self.tp.value() ].squeeze() ) / self.compression
         if len( gonadPos.shape ) > 0:
-            self.ax1.plot( gonadPos[0], gonadPos[1], 'o', color='red', ms=10, mew=0, alpha=.5, lw = 0 ) 
+            self.pointsplot.set_xdata( gonadPos[0] ) 
+            self.pointsplot.set_ydata( gonadPos[1] ) 
+            plt.draw()
 
         # print time
         # print(self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value(), 'timesRel' ])
-        self.ax1.text( 5, 15, '%.2f' % self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value(), 'timesRel' ].values[0], color = 'red' )     
+        self.textplot.set_text( '%.2f' % self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value(), 'timesRel' ].values[0] )
 
         # redraw the canvas
         self.canvas1.draw()

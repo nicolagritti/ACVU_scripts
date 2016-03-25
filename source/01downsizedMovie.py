@@ -155,7 +155,7 @@ class GUI(QtGui.QWidget):
 		if self.channel488.isChecked():
 			channels.append('488nm')
 		if self.channel561.isChecked():
-			channels.append('488nm')
+			channels.append('561nm')
 
 		worms = self.wormsLbl.text().replace(' ', '')
 		if worms[-1] == ',':
