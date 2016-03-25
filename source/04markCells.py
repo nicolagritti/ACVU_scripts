@@ -139,8 +139,6 @@ class GUI(QtGui.QWidget):
         
         self.setFocus()
 
-        self.initializeCanvas1()
-        self.initializeCanvas2()
         self.show()
         
         # BIND BUTTONS TO FUNCTIONS
@@ -206,7 +204,6 @@ class GUI(QtGui.QWidget):
 
         ### load all movies (without timestamps, we will add it later on)
         self.LEDmovie = load_stack( os.path.join( self.pathDial, 'CoolLED_movie.tif' ) )
-        self.imgplot2.set_clim(np.min(self.LEDmovie), np.max(self.LEDmovie))  
 
         # detect available channels
         self.channels = []
@@ -218,22 +215,22 @@ class GUI(QtGui.QWidget):
                 self.channels.append(c)
         self.currentChannel = self.channels[0]
 
+        # initialize figure
+        self.initializeCanvas1()
+        self.initializeCanvas2()
+        self.imgplot2.set_clim(np.min(self.LEDmovie), np.max(self.LEDmovie))  
+
         ### extract current cells already labeled
-        self.currentCells = extract_current_cell_pos( self.cellPosDF, self.tp.value() )
+        self.currentCells = extract_current_cell_pos( self.cellPosDF, np.min( self.gpDF.ix[ pd.notnull( self.gpDF.X ), 'tidx' ] ) )
+
+        ### update the text of the fileName
+        self.fName.setText( self.timesDF.ix[ self.timesDF.tidxRel == np.min( self.gpDF.ix[ pd.notnull( self.gpDF.X ), 'tidx' ] ), 'fName' ].values[0])
 
         ### set the timepoint to the hatching time
         self.tp.setMinimum(np.min(self.timesDF.tidxRel))
         self.tp.setMaximum(np.max(self.timesDF.tidxRel))
         self.tp.setValue( np.min( self.gpDF.ix[ pd.notnull( self.gpDF.X ), 'tidx' ] ) )
-
-        ### extract current cells already labeled
-        self.currentCells = extract_current_cell_pos( self.cellPosDF, self.tp.value() )
-
-        ### update the text of the fileName
-        self.fName.setText( self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value(), 'fName' ].values[0])
         
-        self.loadNewStack()
-
         # self.pathDial.show()
         self.setFocus()
 
@@ -437,9 +434,11 @@ class GUI(QtGui.QWidget):
         self.ax1 = self.fig1.add_subplot(111)
         self.canvas1.draw()
 
-        # plot the image
+        # plot the image with the right size
         self.ax1.cla()
-        self.imgplot1 = self.ax1.imshow( np.zeros((512,512)), cmap = 'gray' )
+        fileName = glob.glob( os.path.join( self.pathDial, 'z*.tif') )[0]
+        size = load_stack( fileName )[0].shape[0]
+        self.imgplot1 = self.ax1.imshow( np.zeros((size,size)), cmap = 'gray' )
         
         # remove the white borders
         self.ax1.autoscale(False)
@@ -460,11 +459,6 @@ class GUI(QtGui.QWidget):
         # plot the image
         self.imgplot1.set_data( self.stacks[self.currentChannel][self.sl.value()] )
         
-        # remove the white borders and plot outline and spline
-        self.ax1.autoscale(False)
-        self.ax1.axis('Off')
-        self.fig1.subplots_adjust(left=0., right=1., top=1., bottom=0.)
-
         # clear cell text and points
         for text in self.text1:
             text.remove()
@@ -486,6 +480,7 @@ class GUI(QtGui.QWidget):
         # change brightness and contrast
         self.sld1.setValue(np.min([self.sld1.value(),self.sld2.value()]))
         self.sld2.setValue(np.max([self.sld1.value(),self.sld2.value()]))
+        self.changeBConCanvas1()
 
         # redraw the canvas
         self.canvas1.draw()
@@ -499,6 +494,7 @@ class GUI(QtGui.QWidget):
 
         # plot the image
         self.ax2.cla()
+        size = 2048 / self.compression
         self.imgplot2 = self.ax2.imshow( np.zeros((512,512)), cmap = 'gray' )
         
         # remove the white borders and plot outline and spline

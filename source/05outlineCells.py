@@ -33,6 +33,7 @@ class GUI(QtGui.QWidget):
         
         self.setWindowTitle( 'Outline Cells' )
         self.cellNames = ['1.p','4.a','1.pp','4.aa','1.ppa','1.ppp','4.aaa','4.aap','b_1','b_4']
+        self.imgpxl = 50
         self.initUI()
         
     #-----------------------------------------------------------------------------------------------
@@ -136,6 +137,9 @@ class GUI(QtGui.QWidget):
         Col3.addWidget(self.canvas2)
         
         self.setFocus()
+
+        self.initializeCanvas1()
+        self.initializeCanvas2()
         self.show()
         
         # BIND BUTTONS TO FUNCTIONS
@@ -145,8 +149,8 @@ class GUI(QtGui.QWidget):
 
         self.tp.valueChanged.connect(self.loadNewStack)
         self.sl.valueChanged.connect(self.updateAllCanvas)
-        self.sld1.valueChanged.connect(self.updateAllCanvas)
-        self.sld2.valueChanged.connect(self.updateAllCanvas)
+        self.sld1.valueChanged.connect(self.changeBC)
+        self.sld2.valueChanged.connect(self.changeBC)
 
         self._488nmBtn.toggled.connect(self.radioClicked)
         self._561nmBtn.toggled.connect(self.radioClicked)
@@ -159,13 +163,6 @@ class GUI(QtGui.QWidget):
     # FORMATTING THE WINDOW
     #-----------------------------------------------------------------------------------------------
 
-    def center(self):
-        
-        qr = self.frameGeometry()
-        cp = QtGui.QDesktopWidget().availableGeometry().center()
-        qr.moveCenter(cp)
-        self.move(qr.topLeft())
-        
     def HLine(self):
         
         toto = QtGui.QFrame()
@@ -173,17 +170,6 @@ class GUI(QtGui.QWidget):
         toto.setFrameShadow(QtGui.QFrame.Sunken)
         return toto
 
-    def VLine(self):
-        
-        toto = QtGui.QFrame()
-        toto.setFrameShape(QtGui.QFrame.VLine)
-        toto.setFrameShadow(QtGui.QFrame.Sunken)
-        return toto
-
-    def heightForWidth(self, width):
-        
-        return width
-    
     #-----------------------------------------------------------------------------------------------
     # BUTTON FUNCTIONS
     #-----------------------------------------------------------------------------------------------
@@ -407,36 +393,58 @@ class GUI(QtGui.QWidget):
     def resetBC(self):
         self.sld1.setValue(np.min(self.stacks[self.currentChannel]))
         self.sld2.setValue(np.max(self.stacks[self.currentChannel]))
-        
-    def updateCanvas1(self):
+
+    def initializeCanvas1(self):
 
         self.fig1.clf()
         self.fig1.subplots_adjust(left=0., right=1., top=1., bottom=0.)
         self.ax1 = self.fig1.add_subplot(111)
         self.canvas1.draw()
 
-        if ( len( self.stacks.keys() ) == 0 ) or ( len( self.currentCells ) == 0 ):
-            # if no images are found, leave the canvas empty
-            return
-
-        # extract current cell data
-        pos = extract_3Dpos( self.currentCells.ix[ self.currentCells.cname == self.analyzedCell ].squeeze() )
-
         # plot the image
-        imgpxl = 50
         self.ax1.cla()
-        imgplot = self.ax1.imshow(self.stacks[self.currentChannel][self.sl.value(),pos[1]-imgpxl/2:pos[1]+imgpxl/2+1,pos[0]-imgpxl/2:pos[0]+imgpxl/2+1], cmap = 'gray', interpolation = 'nearest')
+        self.imgplot1 = self.ax1.imshow( np.zeros((self.imgpxl,self.imgpxl)), cmap = 'gray', interpolation = 'nearest' )
         
         # remove the white borders
         self.ax1.autoscale(False)
         self.ax1.axis('Off')
         self.fig1.subplots_adjust(left=0., right=1., top=1., bottom=0.)
 
+        # plot cell pos and name
+        self.text1 = []
+        self.outline1 = []
+
+        # redraw the canvas
+        self.canvas1.draw()
+        self.setFocus()
+
+    def updateCanvas1(self):
+
+        if ( len( self.stacks.keys() ) == 0 ) or ( len( self.currentCells ) == 0 ):
+            # if no images are found, leave the canvas empty
+            self.initializeCanvas1()
+            return
+
+        # extract current cell data
+        pos = extract_3Dpos( self.currentCells.ix[ self.currentCells.cname == self.analyzedCell ].squeeze() )
+
+        # replot the image
+        imgpxl = self.imgpxl
+        self.imgplot1.set_data( self.stacks[self.currentChannel][self.sl.value(),pos[1]-imgpxl/2:pos[1]+imgpxl/2+1,pos[0]-imgpxl/2:pos[0]+imgpxl/2+1] )
+        
+        # clear cell text and points
+        for text in self.text1:
+            text.remove()
+        self.text1 = []
+
+        for outline in self.outline1:
+            self.ax1.lines.remove(outline)
+        self.outline1 = []
+
         # print cell name
         if pos[2] == self.sl.value():
-            self.ax1.text( 1, 2, self.analyzedCell, color='yellow', size='medium', alpha=.8,
-                    rotation=0, fontsize = 20 )
-            self.ax1.plot( imgpxl/2, imgpxl/2, 'x', color='yellow', alpha = .8, ms = 5 )
+            self.text1.append( self.ax1.text( 1, 2, self.analyzedCell, color='yellow', size='medium', alpha=.8,
+                    rotation=0, fontsize = 20 ) )
 
         ### draw outline
         outline = extract_out( self.currentCells.ix[ self.currentCells.cname == self.analyzedCell ].squeeze() )
@@ -446,29 +454,62 @@ class GUI(QtGui.QWidget):
         if len( outline ) > 1:
             outline = np.vstack( [ outline, outline[0] ] )
 
-        self.ax1.plot( outline[:,0], outline[:,1], '-x', color='yellow', ms=2, alpha=1., lw = .5 )      
+        self.outline1.append( self.ax1.plot( outline[:,0], outline[:,1], '-x', color='yellow', ms=2, alpha=1., lw = .5 )[0] )
 
         # change brightness and contrast
         self.sld1.setValue(np.min([self.sld1.value(),self.sld2.value()]))
         self.sld2.setValue(np.max([self.sld1.value(),self.sld2.value()]))
-        imgplot.set_clim(self.sld1.value(), self.sld2.value())  
 
         # # redraw the canvas
         self.canvas1.draw()
         self.setFocus()
 
-    def updateCanvas2(self):
-        
+    def changeBC(self):
+
+        self.imgplot1.set_clim(self.sld1.value(), self.sld2.value())  
+
+        self.imgplot2.set_clim(self.sld1.value(), self.sld2.value()) 
+
+    def initializeCanvas2(self):
+
+        self.fig2.clf()
+        self.fig2.subplots_adjust(left=0., right=1., top=1., bottom=0.)
+        self.ax2 = self.fig2.add_subplot(111)
+        self.canvas2.draw()
+
         # plot the image
         self.ax2.cla()
-        imgplot = self.ax2.imshow(self.stacks[self.currentChannel][self.sl.value()], cmap = 'gray')
+        size = 2048 / self.compression
+        self.imgplot2 = self.ax2.imshow( np.zeros((size,size)), cmap = 'gray' )
         
         # remove the white borders
         self.ax2.autoscale(False)
         self.ax2.axis('Off')
         self.fig2.subplots_adjust(left=0., right=1., top=1., bottom=0.)
 
-        # extract current cell data
+        # plot cell pos and name
+        self.text2 = []
+        self.points2 = []
+
+        # redraw the canvas
+        self.canvas2.draw()
+        self.setFocus()
+
+    def updateCanvas2(self):
+        
+        # plot the image
+        self.imgplot2.set_data( self.stacks[self.currentChannel][self.sl.value()] )
+        
+        # clear cell text and points
+        for text in self.text2:
+            text.remove()
+        self.text2 = []
+
+        for points in self.points2:
+            self.ax2.lines.remove(points)
+        self.points2 = []
+
+        # draw cell text and point
         if len( self.currentCells ) > 0:
             pos = extract_3Dpos( self.currentCells.ix[ self.currentCells.cname == self.analyzedCell ].squeeze() )
 
@@ -480,10 +521,9 @@ class GUI(QtGui.QWidget):
                     if cell.cname == self.analyzedCell:
                         color = 'yellow'
 
-                    self.ax2.text( cell.X+10, cell.Y + 10, cell.cname, color=color, size='medium', alpha=.8,
-                            rotation=0)
-                    self.ax2.plot( cell.X, cell.Y, 'o', color=color, alpha = .8, ms=5, mew = 0 )
-
+                    self.text2.append( self.ax2.text( cell.X, cell.Y + 18, cell.cname, color=color, size='medium', alpha=.8,
+                            rotation=0 ) )
+                    self.points2.append( self.ax2.plot( cell.X, cell.Y, 'o', color=color, alpha = .8, mew = 0 )[0] )
 
         # redraw the canvas
         self.canvas2.draw()
