@@ -1,5 +1,4 @@
 
-
 """
 PyQt seam cells analysis GUI
 
@@ -23,6 +22,8 @@ from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends import qt_compat
 import glob
 import pandas as pd
+from time import time
+# from skimage.io import MultiImage
 use_pyside = qt_compat.QT_API == qt_compat.QT_API_PYSIDE
 
 class GUI(QtGui.QWidget):
@@ -261,19 +262,22 @@ class GUI(QtGui.QWidget):
 
         print( 'Loading... ', self.pathDial, tRow.fName )
 
-        # load all the available stacks
+        # load all the available stacks - this is the slowest part of the code!!!
         self.stacks = {}
         for ch in self.channels:
             fileName = os.path.join( self.pathDial, tRow.fName + ch + '.tif')
             if os.path.isfile( fileName ):
+                # print(MultiImage('X:\\Simone\\160129_MCHERRY_HLH2GFP_onHB101\\C02_analyzedImages\\Z003_488nm.tif'))
+                # print(fileName, MultiImage( fileName ))
+                # self.stacks[ch] = MultiImage( fileName )
                 self.stacks[ch] = load_stack( fileName )
-
+                
         if len( self.stacks.keys() ) > 0:
             # print(self.stacks.keys(), self.stacksStraight)
-            self.sl.setMaximum(self.stacks[self.currentChannel].shape[0]-1)
+            self.sl.setMaximum(len(self.stacks[self.currentChannel])-1)
 
             self.setBCslidersMinMax()
-        
+
         ### update the text of the fileName
         self.fName.setText( self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value(), 'fName' ].values[0])
 
@@ -604,4 +608,4 @@ if __name__ == '__main__':
     sys.exit( app.exec_() )
     
 
-
+# print(MultiImage('X:\\Simone\\test\\C01_analyzedImages\\z002_488nm.tif'))
