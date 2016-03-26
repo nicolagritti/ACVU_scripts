@@ -16,7 +16,6 @@ import os
 from PyQt4 import QtGui, QtCore
 import numpy as np
 from matplotlib.figure import Figure
-import matplotlib.pyplot as plt
 from matplotlib.backend_bases import key_press_handler
 from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends import qt_compat
@@ -134,13 +133,11 @@ class GUI(QtGui.QWidget):
         Col2.addWidget(self.sld2)
         Col2.addWidget(self.canvas1)
 
-        Col3.addWidget(self.cellTbl)
+        # Col3.addWidget(self.cellTbl)
         Col3.addWidget(self.canvas2)
         
         self.setFocus()
 
-        self.initializeCanvas1()
-        self.initializeCanvas2()
         self.show()
         
         # BIND BUTTONS TO FUNCTIONS
@@ -150,12 +147,12 @@ class GUI(QtGui.QWidget):
 
         self.tp.valueChanged.connect(self.loadNewStack)
         self.sl.valueChanged.connect(self.updateCanvas1)
-        self.sld1.valueChanged.connect(self.changeBConCanvas1)
-        self.sld2.valueChanged.connect(self.changeBConCanvas1)
+        self.sld1.valueChanged.connect(self.updateCanvas1)
+        self.sld2.valueChanged.connect(self.updateCanvas1)
 
-        self._488nmBtn.toggled.connect(self.radioClicked)
-        self._561nmBtn.toggled.connect(self.radioClicked)
-        self.CoolLEDBtn.toggled.connect(self.radioClicked)
+        self._488nmBtn.toggled.connect(self.radio488Clicked)
+        self._561nmBtn.toggled.connect(self.radio561Clicked)
+        self.CoolLEDBtn.toggled.connect(self.radioCoolLEDClicked)
 
         self.fig1.canvas.mpl_connect('button_press_event',self.onMouseClickOnCanvas1)        
         self.fig1.canvas.mpl_connect('scroll_event',self.wheelEvent)        
@@ -178,7 +175,7 @@ class GUI(QtGui.QWidget):
     def selectWorm(self):
 
         ### store the folders
-        self.pathDial = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder', 'Y:\\Images')
+        self.pathDial = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder', 'C:\\Users\\Nicola\\Dropbox\\PhD\\Codes\\test')#'Y:\\Images')
         self.worm = self.pathDial.split("\\")[-1].split('_')[0]
         self.path = os.path.dirname( self.pathDial )
         self.setWindowTitle('Mark Cells - ' + self.pathDial)
@@ -204,10 +201,6 @@ class GUI(QtGui.QWidget):
         else:
             self.cellPosDF = create_cell_pos( self.timesDF, self.cellNames )
 
-        ### load all movies (without timestamps, we will add it later on)
-        self.LEDmovie = load_stack( os.path.join( self.pathDial, 'CoolLED_movie.tif' ) )
-        self.imgplot2.set_clim(np.min(self.LEDmovie), np.max(self.LEDmovie))  
-
         # detect available channels
         self.channels = []
         chns = ['CoolLED','488nm','561nm']
@@ -216,33 +209,67 @@ class GUI(QtGui.QWidget):
             if os.path.isfile( os.path.join( self.pathDial, c + '_movie.tif' ) ):
 
                 self.channels.append(c)
-        self.currentChannel = self.channels[0]
+        self.currentChannel = 'CoolLED'
+
+        ### detect size of the cropped images
+        tp = np.min( self.gpDF.ix[ pd.notnull( self.gpDF.X ), 'tidx' ] )
+        tRow = self.timesDF.ix[ self.timesDF.tidxRel == tp ].squeeze()
+        fileName = os.path.join( self.pathDial, tRow.fName + 'CoolLED.tif')
+        firststack = load_stack( fileName )
+        self.cropsize = firststack.shape[1]
+        self.nslices = firststack.shape[0]
+
+        ### load CoolLED movie
+        self.LEDmovie = load_stack( os.path.join( self.pathDial, 'CoolLED_movie.tif' ) )
+        self.initializeCanvas1()
+        self.initializeCanvas2()
 
         ### extract current cells already labeled
         self.currentCells = extract_current_cell_pos( self.cellPosDF, self.tp.value() )
+
+        tp = np.min( self.gpDF.ix[ pd.notnull( self.gpDF.X ), 'tidx' ] )
+
+        ### extract current cells already labeled
+        self.currentCells = extract_current_cell_pos( self.cellPosDF, tp )
+
+        ### update the text of the fileName
+        self.fName.setText( self.timesDF.ix[ self.timesDF.tidxRel == tp, 'fName' ].values[0])
 
         ### set the timepoint to the hatching time
         self.tp.setMinimum(np.min(self.timesDF.tidxRel))
         self.tp.setMaximum(np.max(self.timesDF.tidxRel))
-        self.tp.setValue( np.min( self.gpDF.ix[ pd.notnull( self.gpDF.X ), 'tidx' ] ) )
 
-        ### extract current cells already labeled
-        self.currentCells = extract_current_cell_pos( self.cellPosDF, self.tp.value() )
+        ### set the max slice number
+        self.sl.setMaximum( self.nslices )
 
-        ### update the text of the fileName
-        self.fName.setText( self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value(), 'fName' ].values[0])
-        
-        self.loadNewStack()
+        if tp != self.tp.value():
+            self.tp.setValue( tp )
+        else:
+            self.loadNewStack()
+
+        self.CoolLEDBtn.setChecked(True)    # this uppdates the canvas1 once more
 
         # self.pathDial.show()
         self.setFocus()
 
     def loadNewStack(self):
 
+        ### TO BE IMPLEMENTED CHECK ON EXISTENCE OF THE STACK!!! if it's not there, leave canvas 1 blank and update only canvas2
+
         # print(self.fList['gfp'][self.tp.value()])
         tRow = self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value() ].squeeze()
 
+        ### update the text of the fileName
+        self.fName.setText( self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value(), 'fName' ].values[0])
+
         print( 'Loading... ', self.pathDial, tRow.fName )
+
+        # calculate the max value of the previous stack
+        try:
+            prevmax = np.max( [ np.max(self.stacks[ch]) for ch in self.channels ] )
+        # if it's the first time a stack is to be loaded (so if there is no previous stack), set it to zero
+        except:
+            prevmax = 0
 
         # load all the available stacks - this is the slowest part of the code!!!
         self.stacks = {}
@@ -253,21 +280,22 @@ class GUI(QtGui.QWidget):
                 # print(fileName, MultiImage( fileName ))
                 # self.stacks[ch] = MultiImage( fileName )
                 self.stacks[ch] = load_stack( fileName )
+            # if there are no files for the timepoint, create a blank image
+            else:
+                self.stacks[ch] = prevmax*np.ones((self.nslices,self.cropsize,self.cropsize))
                 
         if len( self.stacks.keys() ) > 0:
-            # print(self.stacks.keys(), self.stacksStraight)
-            self.sl.setMaximum(len(self.stacks[self.currentChannel])-1)
+            ### extract current cells already labeled
+            self.currentCells = extract_current_cell_pos( self.cellPosDF, self.tp.value() )
 
-            self.setBCslidersMinMax()
-
-        ### update the text of the fileName
-        self.fName.setText( self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value(), 'fName' ].values[0])
-
-        ### extract current cells already labeled
-        self.currentCells = extract_current_cell_pos( self.cellPosDF, self.tp.value() )
-
-        # self.updateTable()
-        self.updateAllCanvas()
+            # if the BC bound are different, the BCsliderMinMax will automatically update canvas1. Otherwise, manually update it!
+            newmax = np.max( [ np.max(self.stacks[ch]) for ch in self.channels ] )
+            if prevmax != newmax:
+                self.setBCslidersMinMax()            
+            else:
+                self.updateCanvas1()
+    
+        self.updateCanvas2()
 
     def saveData(self):
         
@@ -277,31 +305,37 @@ class GUI(QtGui.QWidget):
             QtGui.QMessageBox.about(self,'Warning!','There is a mistake in the cell labels!')
         self.setFocus()
         
-    def updateAllCanvas(self):
-        self.updateRadioBtn()
-        self.updateCanvas1()
-        self.updateCanvas2()
-        
-    def radioClicked(self):
-        if self._488nmBtn.isChecked():
+    def radio488Clicked(self, enabled):
+        print('radio 488 clicked')
+
+        if enabled:
             if '488nm' in self.channels:
                 self.currentChannel = '488nm'
+                self.setFocus()
+                self.updateCanvas1()
             else:
+                self.CoolLEDBtn.setChecked(True)
                 QtGui.QMessageBox.about(self, 'Warning', 'No 488nm channel!')
-        elif self._561nmBtn.isChecked():
+
+    def radio561Clicked(self, enabled):
+        print('radio 561 clicked')
+
+        if enabled:
             if '561nm' in self.channels:
                 self.currentChannel = '561nm'
+                self.setFocus()
+                self.updateCanvas1()
             else:
+                self.CoolLEDBtn.setChecked(True)
                 QtGui.QMessageBox.about(self, 'Warning', 'No 561nm channel!')
-        elif self.CoolLEDBtn.isChecked():
-            if 'CoolLED' in self.channels:
-                self.currentChannel = 'CoolLED'
-            else:
-                QtGui.QMessageBox.about(self, 'Warning', 'No CoolLED channel!')
-        self.setBCslidersMinMax()
-        self.resetBC()
-        self.setFocus()
-        self.updateCanvas1()
+
+    def radioCoolLEDClicked(self, enabled):
+        print('radio LED clicked')
+
+        if enabled:
+            self.currentChannel = 'CoolLED'
+            self.setFocus()
+            self.updateCanvas1()
 
     #-----------------------------------------------------------------------------------------------
     # DEFAULT FUNCTION FOR KEY AND MOUSE PRESS ON WINDOW
@@ -398,6 +432,10 @@ class GUI(QtGui.QWidget):
             
         elif event.button == 3:
 
+            if len( self.currentCells ) == 0:
+                self.setFocus()
+                return
+
             # remove a cell (the closest to the cursor at the moment of right-click)
             idx = closer_cell( refpos.astype(np.uint16), self.currentCells )
             self.currentCells = self.currentCells.drop( [ idx ] )
@@ -411,35 +449,23 @@ class GUI(QtGui.QWidget):
     # UTILS
     #-----------------------------------------------------------------------------------------------
 
-    def updateRadioBtn(self):
-        if self.currentChannel == '488nm':
-            self._488nmBtn.setChecked(True)
-        elif self.currentChannel == '561nm':
-            self._561nmBtn.setChecked(True)
-        elif self.currentChannel == 'CoolLED':
-            self.CoolLEDBtn.setChecked(True)
-        self.setFocus()
-
     def setBCslidersMinMax(self):
-        self.sld1.setMaximum(np.max(self.stacks[self.currentChannel]))
-        self.sld1.setMinimum(np.min(self.stacks[self.currentChannel]))
-        self.sld2.setMaximum(np.max(self.stacks[self.currentChannel]))
-        self.sld2.setMinimum(np.min(self.stacks[self.currentChannel]))
-
-    def resetBC(self):
-        self.sld1.setValue(np.min(self.stacks[self.currentChannel]))
-        self.sld2.setValue(np.max(self.stacks[self.currentChannel]))
+        self.sld1.setMaximum( np.max( [ np.max(self.stacks[ch]) for ch in self.channels ] ) )
+        self.sld1.setMinimum(0)
+        self.sld2.setMaximum (np.max( [ np.max(self.stacks[ch]) for ch in self.channels ] ) )
+        self.sld2.setMinimum(0)
 
     def initializeCanvas1(self):
+        print('initializing canvas1')
 
         self.fig1.clf()
         self.fig1.subplots_adjust(left=0., right=1., top=1., bottom=0.)
         self.ax1 = self.fig1.add_subplot(111)
         self.canvas1.draw()
 
-        # plot the image
+        # plot the first blank image with the right size
         self.ax1.cla()
-        self.imgplot1 = self.ax1.imshow( np.zeros((512,512)), cmap = 'gray' )
+        self.imgplot1 = self.ax1.imshow( np.zeros((self.cropsize,self.cropsize)), cmap = 'gray' )
         
         # remove the white borders
         self.ax1.autoscale(False)
@@ -459,13 +485,12 @@ class GUI(QtGui.QWidget):
 
         # plot the image
         self.imgplot1.set_data( self.stacks[self.currentChannel][self.sl.value()] )
-        
-        # remove the white borders and plot outline and spline
-        self.ax1.autoscale(False)
-        self.ax1.axis('Off')
-        self.fig1.subplots_adjust(left=0., right=1., top=1., bottom=0.)
 
+        # change brightness and contrast
+        self.imgplot1.set_clim( self.sld1.value(), self.sld2.value() )  
+        
         # clear cell text and points
+        # print(self.text1,self.points1)
         for text in self.text1:
             text.remove()
         self.text1 = []
@@ -483,24 +508,18 @@ class GUI(QtGui.QWidget):
                         rotation=0 ) )
                 self.points1.append( self.ax1.plot( cell.X, cell.Y, 'o', color='red', alpha = .8, mew = 0 )[0] )
 
-        # change brightness and contrast
-        self.sld1.setValue(np.min([self.sld1.value(),self.sld2.value()]))
-        self.sld2.setValue(np.max([self.sld1.value(),self.sld2.value()]))
-
         # redraw the canvas
         self.canvas1.draw()
         self.setFocus()
 
-    def changeBConCanvas1(self):
-
-        self.imgplot1.set_clim(self.sld1.value(), self.sld2.value())  
-
     def initializeCanvas2(self):
+        print('initializing canvas2')
 
         # plot the image
         self.ax2.cla()
         self.imgplot2 = self.ax2.imshow( np.zeros((512,512)), cmap = 'gray' )
-        
+        self.imgplot2.set_clim( np.min(self.LEDmovie), np.max(self.LEDmovie) )
+
         # remove the white borders and plot outline and spline
         self.ax2.autoscale(False)
         self.ax2.axis('Off')
@@ -566,11 +585,11 @@ class GUI(QtGui.QWidget):
 
         if whatToChange == 'time':
 
-            # before changinf timepoint, print labeled cells and check if they are OK
+            # before changing timepoint, print labeled cells and check if they are OK
             print( self.currentCells )
 
             # if they are OK (and not going to negative times), change timepoint
-            if self.checkConsistencyCellNames() and ( self.tp.value() + increment ) >= 0 :
+            if self.checkConsistencyCellNames() :
                 print('tp changed')
                 self.tp.setValue( self.tp.value() + increment )
 
