@@ -16,7 +16,6 @@ import os
 from PyQt4 import QtGui, QtCore
 import numpy as np
 from matplotlib.figure import Figure
-import matplotlib.pyplot as plt
 from matplotlib.backend_bases import key_press_handler
 from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends import qt_compat
@@ -134,7 +133,7 @@ class GUI(QtGui.QWidget):
         Col2.addWidget(self.sld2)
         Col2.addWidget(self.canvas1)
 
-        Col3.addWidget(self.cellTbl)
+        # Col3.addWidget(self.cellTbl)
         Col3.addWidget(self.canvas2)
         
         self.setFocus()
@@ -419,6 +418,10 @@ class GUI(QtGui.QWidget):
             
         elif event.button == 3:
 
+            if len( self.currentCells ) == 0:
+                self.setFocus()
+                return
+
             # remove a cell (the closest to the cursor at the moment of right-click)
             idx = closer_cell( refpos.astype(np.uint16), self.currentCells )
             self.currentCells = self.currentCells.drop( [ idx ] )
@@ -476,11 +479,6 @@ class GUI(QtGui.QWidget):
         # change brightness and contrast
         self.imgplot1.set_clim( self.sld1.value(), self.sld2.value() )  
         
-        # remove the white borders and plot outline and spline
-        self.ax1.autoscale(False)
-        self.ax1.axis('Off')
-        self.fig1.subplots_adjust(left=0., right=1., top=1., bottom=0.)
-
         # clear cell text and points
         # print(self.text1,self.points1)
         for text in self.text1:
@@ -499,8 +497,6 @@ class GUI(QtGui.QWidget):
                 self.text1.append( self.ax1.text( cell.X, cell.Y + 18, cell.cname, color='red', size='medium', alpha=.8,
                         rotation=0 ) )
                 self.points1.append( self.ax1.plot( cell.X, cell.Y, 'o', color='red', alpha = .8, mew = 0 )[0] )
-
-                plt.draw()
 
         # redraw the canvas
         self.canvas1.draw()
