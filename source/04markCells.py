@@ -254,7 +254,8 @@ class GUI(QtGui.QWidget):
 
     def loadNewStack(self):
 
-        ### TO BE IMPLEMENTED CHECK ON EXISTENCE OF THE STACK!!! if it's not there, leave canvas 1 blank and update only canvas2
+        # before changing timepoint, print labeled cells and check if they are OK
+        print( 'cells labeled:\n ', self.currentCells )
 
         # print(self.fList['gfp'][self.tp.value()])
         tRow = self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value() ].squeeze()
@@ -582,11 +583,8 @@ class GUI(QtGui.QWidget):
 
     def changeSpaceTime(self, whatToChange, increment):
 
+
         if whatToChange == 'time':
-
-            # before changing timepoint, print labeled cells and check if they are OK
-            print( self.currentCells )
-
             # if they are OK (and not going to negative times), change timepoint
             if self.checkConsistencyCellNames() :
                 print('tp changed')
@@ -606,3 +604,6 @@ if __name__ == '__main__':
     app.setStyle( "plastique" )
     app.installEventFilter( gui )
     sys.exit( app.exec_() )
+    
+
+# print(MultiImage('X:\\Simone\\test\\C01_analyzedImages\\z002_488nm.tif'))
