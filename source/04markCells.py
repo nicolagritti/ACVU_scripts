@@ -582,7 +582,6 @@ class GUI(QtGui.QWidget):
 
     def changeSpaceTime(self, whatToChange, increment):
 
-
         if whatToChange == 'time':
 
             # before changing timepoint, print labeled cells and check if they are OK
@@ -607,6 +606,3 @@ if __name__ == '__main__':
     app.setStyle( "plastique" )
     app.installEventFilter( gui )
     sys.exit( app.exec_() )
-    
-
-# print(MultiImage('X:\\Simone\\test\\C01_analyzedImages\\z002_488nm.tif'))
