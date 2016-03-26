@@ -316,14 +316,14 @@ class GUI(QtGui.QWidget):
     #-----------------------------------------------------------------------------------------------
 
     def setBCslidersMinMax(self):
-        self.sld1.setMaximum( np.max( [ np.max(self.stacks[ch]) for ch in self.channels ] ) )
+        self.sld1.setMaximum( np.max( [ np.max(self.channels[key]) for key in self.channels.keys() ] ) )
         self.sld1.setMinimum(0)
-        self.sld2.setMaximum( np.max( [ np.max(self.stacks[ch]) for ch in self.channels ] ) )
+        self.sld2.setMaximum( np.max( [ np.max(self.channels[key]) for key in self.channels.keys() ] ) )
         self.sld2.setMinimum(0)
 
     def initializeCanvas1(self):
         print('initializing canvas1... ')
-
+        
         # plot the image
         self.ax1.cla()
         size = 2048 / self.compression
@@ -349,6 +349,8 @@ class GUI(QtGui.QWidget):
     def updateCanvas1(self):
         print('updating canvas1... ')
         
+        self.fName.setText( self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value(), 'fName' ].values[0] )
+
         # plot the image
         self.imgplot.set_data( self.channels[self.currentChannel][self.tp.value() + self.hatchingtidx] )
         

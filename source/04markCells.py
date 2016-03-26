@@ -201,11 +201,6 @@ class GUI(QtGui.QWidget):
         else:
             self.cellPosDF = create_cell_pos( self.timesDF, self.cellNames )
 
-        ### load CoolLED movie
-        self.LEDmovie = load_stack( os.path.join( self.pathDial, 'CoolLED_movie.tif' ) )
-        self.initializeCanvas1()
-        self.initializeCanvas2()
-
         # detect available channels
         self.channels = []
         chns = ['CoolLED','488nm','561nm']
@@ -215,6 +210,19 @@ class GUI(QtGui.QWidget):
 
                 self.channels.append(c)
         self.currentChannel = 'CoolLED'
+
+        ### detect size of the cropped images
+        tp = np.min( self.gpDF.ix[ pd.notnull( self.gpDF.X ), 'tidx' ] )
+        tRow = self.timesDF.ix[ self.timesDF.tidxRel == tp ].squeeze()
+        fileName = os.path.join( self.pathDial, tRow.fName + 'CoolLED.tif')
+        firststack = load_stack( fileName )
+        self.cropsize = firststack.shape[1]
+        self.nslices = firststack.shape[0]
+
+        ### load CoolLED movie
+        self.LEDmovie = load_stack( os.path.join( self.pathDial, 'CoolLED_movie.tif' ) )
+        self.initializeCanvas1()
+        self.initializeCanvas2()
 
         ### extract current cells already labeled
         self.currentCells = extract_current_cell_pos( self.cellPosDF, self.tp.value() )
@@ -231,6 +239,9 @@ class GUI(QtGui.QWidget):
         self.tp.setMinimum(np.min(self.timesDF.tidxRel))
         self.tp.setMaximum(np.max(self.timesDF.tidxRel))
 
+        ### set the max slice number
+        self.sl.setMaximum( self.nslices )
+
         if tp != self.tp.value():
             self.tp.setValue( tp )
         else:
@@ -243,6 +254,8 @@ class GUI(QtGui.QWidget):
 
     def loadNewStack(self):
 
+        ### TO BE IMPLEMENTED CHECK ON EXISTENCE OF THE STACK!!! if it's not there, leave canvas 1 blank and update only canvas2
+
         # print(self.fList['gfp'][self.tp.value()])
         tRow = self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value() ].squeeze()
 
@@ -251,11 +264,14 @@ class GUI(QtGui.QWidget):
 
         print( 'Loading... ', self.pathDial, tRow.fName )
 
-        # load all the available stacks - this is the slowest part of the code!!!
+        # calculate the max value of the previous stack
         try:
             prevmax = np.max( [ np.max(self.stacks[ch]) for ch in self.channels ] )
+        # if it's the first time a stack is to be loaded (so if there is no previous stack), set it to zero
         except:
             prevmax = 0
+
+        # load all the available stacks - this is the slowest part of the code!!!
         self.stacks = {}
         for ch in self.channels:
             fileName = os.path.join( self.pathDial, tRow.fName + ch + '.tif')
@@ -264,20 +280,18 @@ class GUI(QtGui.QWidget):
                 # print(fileName, MultiImage( fileName ))
                 # self.stacks[ch] = MultiImage( fileName )
                 self.stacks[ch] = load_stack( fileName )
+            # if there are no files for the timepoint, create a blank image
+            else:
+                self.stacks[ch] = prevmax*np.ones((self.nslices,self.cropsize,self.cropsize))
                 
         if len( self.stacks.keys() ) > 0:
-            # print(self.stacks.keys(), self.stacksStraight)
-            self.sl.setMaximum( len(self.stacks[self.currentChannel])-1 )
-
             ### extract current cells already labeled
             self.currentCells = extract_current_cell_pos( self.cellPosDF, self.tp.value() )
 
             # if the BC bound are different, the BCsliderMinMax will automatically update canvas1. Otherwise, manually update it!
             newmax = np.max( [ np.max(self.stacks[ch]) for ch in self.channels ] )
-
             if prevmax != newmax:
-                self.setBCslidersMinMax()
-            
+                self.setBCslidersMinMax()            
             else:
                 self.updateCanvas1()
     
@@ -451,11 +465,7 @@ class GUI(QtGui.QWidget):
 
         # plot the first blank image with the right size
         self.ax1.cla()
-        tp = np.min( self.gpDF.ix[ pd.notnull( self.gpDF.X ), 'tidx' ] )
-        tRow = self.timesDF.ix[ self.timesDF.tidxRel == tp ].squeeze()
-        fileName = os.path.join( self.pathDial, tRow.fName + 'CoolLED.tif')
-        size = load_stack( fileName ).shape[1]
-        self.imgplot1 = self.ax1.imshow( np.zeros((size,size)), cmap = 'gray' )
+        self.imgplot1 = self.ax1.imshow( np.zeros((self.cropsize,self.cropsize)), cmap = 'gray' )
         
         # remove the white borders
         self.ax1.autoscale(False)
@@ -579,7 +589,7 @@ class GUI(QtGui.QWidget):
             print( self.currentCells )
 
             # if they are OK (and not going to negative times), change timepoint
-            if self.checkConsistencyCellNames() and ( self.tp.value() + increment ) >= 0 :
+            if self.checkConsistencyCellNames() :
                 print('tp changed')
                 self.tp.setValue( self.tp.value() + increment )
 
