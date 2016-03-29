@@ -227,11 +227,6 @@ class GUI(QtGui.QWidget):
         ### extract current cells already labeled
         self.currentCells = extract_current_cell_pos( self.cellPosDF, self.tp.value() )
 
-        tp = np.min( self.gpDF.ix[ pd.notnull( self.gpDF.X ), 'tidx' ] )
-
-        ### extract current cells already labeled
-        self.currentCells = extract_current_cell_pos( self.cellPosDF, tp )
-
         ### update the text of the fileName
         self.fName.setText( self.timesDF.ix[ self.timesDF.tidxRel == tp, 'fName' ].values[0])
 
@@ -285,16 +280,15 @@ class GUI(QtGui.QWidget):
             else:
                 self.stacks[ch] = prevmax*np.ones((self.nslices,self.cropsize,self.cropsize))
                 
-        if len( self.stacks.keys() ) > 0:
-            ### extract current cells already labeled
-            self.currentCells = extract_current_cell_pos( self.cellPosDF, self.tp.value() )
+        ### extract current cells already labeled
+        self.currentCells = extract_current_cell_pos( self.cellPosDF, self.tp.value() )
 
-            # if the BC bound are different, the BCsliderMinMax will automatically update canvas1. Otherwise, manually update it!
-            newmax = np.max( [ np.max(self.stacks[ch]) for ch in self.channels ] )
-            if prevmax != newmax:
-                self.setBCslidersMinMax()            
-            else:
-                self.updateCanvas1()
+        # if the BC bound are different, the BCsliderMinMax will automatically update canvas1. Otherwise, manually update it!
+        newmax = np.max( [ np.max(self.stacks[ch]) for ch in self.channels ] )
+        if prevmax != newmax:
+            self.setBCslidersMinMax()            
+        else:
+            self.updateCanvas1()
     
         self.updateCanvas2()
 
