@@ -147,8 +147,8 @@ class GUI(QtGui.QWidget):
 
         self.tp.valueChanged.connect(self.loadNewStack)
         self.sl.valueChanged.connect(self.updateCanvas1)
-        self.sld1.valueChanged.connect(self.updateCanvas1)
-        self.sld2.valueChanged.connect(self.updateCanvas1)
+        self.sld1.valueChanged.connect(self.updateBC)
+        self.sld2.valueChanged.connect(self.updateBC)
 
         self._488nmBtn.toggled.connect(self.radio488Clicked)
         self._561nmBtn.toggled.connect(self.radio561Clicked)
@@ -235,7 +235,7 @@ class GUI(QtGui.QWidget):
         self.tp.setMaximum(np.max(self.timesDF.tidxRel))
 
         ### set the max slice number
-        self.sl.setMaximum( self.nslices )
+        self.sl.setMaximum( self.nslices-1 )
 
         if tp != self.tp.value():
             self.tp.setValue( tp )
@@ -331,6 +331,11 @@ class GUI(QtGui.QWidget):
             self.currentChannel = 'CoolLED'
             self.setFocus()
             self.updateCanvas1()
+
+    def updateBC(self):
+        # change brightness and contrast
+        self.imgplot1.set_clim( self.sld1.value(), self.sld2.value() )  
+        self.canvas1.draw()
 
     #-----------------------------------------------------------------------------------------------
     # DEFAULT FUNCTION FOR KEY AND MOUSE PRESS ON WINDOW
