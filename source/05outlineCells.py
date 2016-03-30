@@ -227,6 +227,7 @@ class GUI(QtGui.QWidget):
 
 		### detect size of the cropped images
 		tp = first_tidx_pos_all_cells( self.cellPosDF )
+		self.prevtp = tp-1
 		tRow = self.timesDF.ix[ self.timesDF.tidxRel == tp ].squeeze()
 		fileName = os.path.join( self.pathDial, tRow.fName + 'CoolLED.tif')
 		firststack = load_stack( fileName )
@@ -251,10 +252,7 @@ class GUI(QtGui.QWidget):
 		### set the max slice number
 		self.sl.setMaximum( self.nslices-1 )
 
-		if tp != self.tp.value():
-			self.tp.setValue( tp )
-		else:
-			self.loadNewStack()
+		self.tp.setValue( tp )
 
 		self.CoolLEDBtn.setChecked(True)    # this uppdates the canvases once more
 
@@ -263,8 +261,13 @@ class GUI(QtGui.QWidget):
 
 	def loadNewStack(self):
 
+		# update the cell outline data frame before updating the images and retrireving new cells
+		newCellOutDF = update_cell_out_DF( self.currentCells, self.cellOutDF, self.prevtp )
+		self.cellOutDF = newCellOutDF
+		self.prevtp = self.tp.value()
+
 		# before changing timepoint, print labeled cells and check if they are OK
-		print( 'cells labeled:\n ', self.currentCells )
+		# print( 'cells labeled:\n ', self.currentCells )
 
 		# print(self.fList['gfp'][self.tp.value()])
 		tRow = self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value() ].squeeze()
@@ -292,28 +295,33 @@ class GUI(QtGui.QWidget):
 				self.stacks[ch] = load_stack( fileName )
 			# if there are no files for the timepoint, create a blank image
 			else:
-				self.stacks[ch] = prevmax*np.ones((self.nslices,self.cropsize,self.cropsize))
+				self.stacks[ch] = prevmax * np.ones((self.nslices,self.cropsize,self.cropsize))
 
 		### extract current cells already labeled
 		self.currentCells = extract_current_cell_out( self.cellPosDF, self.cellOutDF, self.tp.value() )
-		print(self.currentCells)
+		# print(self.currentCells)
 
 		# if there are cells labeled and if the previously currently analyzed cell is present, set it as the currently labeled cell and select the right slice
 		if len(self.currentCells) > 0:
+			print('cells detected')
 
 			### update currently analyzed cell
 			if self.analyzedCell not in list( self.currentCells.cname ):
 				self.analyzedCell = self.currentCells.cname[0]
 
-			### update slice
-			self.sl.setValue( self.currentCells.ix[ self.currentCells.cname == self.analyzedCell, 'Z' ] )
+			### update slice, if it's the same slice number, manually replot the images
+			newslice = self.currentCells.ix[ self.currentCells.cname == self.analyzedCell, 'Z' ].values[0]
+			if newslice != self.sl.value():
+				self.sl.setValue( newslice )
 
-		# if the BC bound are different, the BCsliderMinMax will automatically update all canvases. Otherwise, manually update it!
-		newmax = np.max( [ np.max(self.stacks[ch]) for ch in self.channels ] )
-		if prevmax != newmax:
-			self.setBCslidersMinMax()            
-		else:
+			else:
+				self.updateAllCanvas()
+		# if no cells are found, manually plot the blank images
+		elif len(self.currentCells) == 0:
 			self.updateAllCanvas()
+
+		# update the BC
+		self.setBCslidersMinMax()            
 
 	def saveData(self):
 	    
@@ -583,12 +591,7 @@ class GUI(QtGui.QWidget):
 
 	def changeSpaceTime(self, whatToChange, increment):
 
-
 		if whatToChange == 'time':
-
-			newCellOutDF = update_cell_out_DF( self.currentCells, self.cellOutDF, self.tp.value() )
-			self.cellOutDF = newCellOutDF
-
 			# if they are OK (and not going to negative times), change timepoint
 			self.tp.setValue( self.tp.value() + increment )
 
