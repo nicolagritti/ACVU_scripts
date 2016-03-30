@@ -103,7 +103,7 @@ class GUI(QtGui.QWidget):
 	def selectExp(self):
 
 		### store the folder
-		self.pathDial = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder', 'Y:\\Images')
+		self.pathDial = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder', 'C:\\Users\\Nicola\\Dropbox\\PhD\\codes')#Y:\\Images')
 		self.exp = self.pathDial.split('\\')[-1]
 		self.expLbl.setText(self.exp)
 
@@ -258,7 +258,7 @@ class GUI(QtGui.QWidget):
 					movieFinal = ( ( 2**8 - 1. ) * movieFinal  ).astype( np.uint8 )
 
 					# save the movie without timestamps
-					imsave( os.path.join( outpath, channel + '_movie.tif' ), np.array( movieFinal ) )
+					imsave( os.path.join( outpath, channel + '_movie.tif' ), np.array( movieFinal ).astype(np.uint8) )
 
 				### CREATE AND SAVE THE MOVIE WITH TIMESTAMPS
 				
@@ -283,7 +283,7 @@ class GUI(QtGui.QWidget):
 
 						movieFinalWithTime[idx] = np.asarray( imgpil )
 
-					imsave( os.path.join( outpath, channel + '_movieWithTime.tif' ), np.array( movieFinalWithTime ) )
+					imsave( os.path.join( outpath, channel + '_movieWithTime.tif' ), np.array( movieFinalWithTime ).astype(np.uint8) )
 
 
 
