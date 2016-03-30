@@ -188,7 +188,7 @@ class GUI(QtGui.QWidget):
 	def selectWorm(self):
 
 		### store the folders
-		self.pathDial = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder', 'C:\\Users\\Nicola\\Dropbox\\PhD\\Codes\\test')#'Y:\\Images')
+		self.pathDial = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder', 'X:\\Simone\\160129_MCHERRY_HLH2GFP_onHB101')#'Y:\\Images')
 		self.worm = self.pathDial.split("\\")[-1].split('_')[0]
 		self.path = os.path.dirname( self.pathDial )
 		self.setWindowTitle('Outline Cells - ' + self.pathDial)
@@ -226,7 +226,7 @@ class GUI(QtGui.QWidget):
 		self.currentChannel = 'CoolLED'
 
 		### detect size of the cropped images
-		tp = np.min( self.gpDF.ix[ pd.notnull( self.gpDF.X ), 'tidx' ] )
+		tp = first_tidx_pos_all_cells( self.cellPosDF )
 		tRow = self.timesDF.ix[ self.timesDF.tidxRel == tp ].squeeze()
 		fileName = os.path.join( self.pathDial, tRow.fName + 'CoolLED.tif')
 		firststack = load_stack( fileName )
