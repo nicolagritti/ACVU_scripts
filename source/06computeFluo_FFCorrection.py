@@ -66,7 +66,7 @@ class GUI(QtGui.QWidget):
 		# DEFINE ALL WIDGETS AND BUTTONS
 
 		loadBtn = QtGui.QPushButton('Load DataSet')
-		computeBtn = QtGui.QPushButton('Compute 488 signal (with autmatic drift correction)')
+		computeBtn = QtGui.QPushButton('Compute signal with automatic drift correction')
 		saveBtn = QtGui.QPushButton('Save data (F12)')
 
 		tpLbl = QtGui.QLabel('Relative Tp:')
@@ -132,7 +132,7 @@ class GUI(QtGui.QWidget):
 		Col2.addWidget(self.canvas1)
 
 		Col3.addWidget(self.canvas2)
-		Col3.addWidget(computeBtn)
+		Col1.addWidget(computeBtn,6,0)
 
 		self.setFocus()
 		self.show()
@@ -232,6 +232,7 @@ class GUI(QtGui.QWidget):
 
 		### detect size of the cropped images
 		tp = first_tidx_pos_all_cells( self.cellPosDF )
+		self.prevtp = tp-1
 		tRow = self.timesDF.ix[ self.timesDF.tidxRel == tp ].squeeze()
 		fileName = os.path.join( self.pathDial, tRow.fName + 'CoolLED.tif')
 		firststack = load_stack( fileName )
@@ -243,7 +244,7 @@ class GUI(QtGui.QWidget):
 		self.initializeCanvas2()
 
 		### extract current cells already labeled
-		self.currentCells = extract_current_cell_out( self.cellPosDF, self.cellOutDF, self.tp.value() )
+		self.currentCells = extract_current_cell_fluo( self.cellPosDF, self.cellOutDF, self.cellFluoDF, self.tp.value() )
 		self.analyzedCell = '---'
 
 		### update the text of the fileName
@@ -268,10 +269,12 @@ class GUI(QtGui.QWidget):
 
 	def loadNewStack(self):
 
-		# before changing timepoint, print labeled cells and check if they are OK
-		print( 'cells labeled:\n ', self.currentCells )
+		# update the cell outline data frame before updating the images and retrireving new cells
+		newCellFluoDF = update_cell_fluo_DF( self.currentCells, self.cellFluoDF, self.prevtp )
+		self.cellFluoDF = newCellFluoDF.copy()
+		self.prevtp = self.tp.value()
 
-		# print(self.fList['gfp'][self.tp.value()])
+		# before changing timepoint, print labeled cells and check if they are OK
 		tRow = self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value() ].squeeze()
 
 		### update the text of the fileName
@@ -300,26 +303,29 @@ class GUI(QtGui.QWidget):
 				self.stacks[ch] = prevmax*np.ones((self.nslices,self.cropsize,self.cropsize))
 
 		### extract current cells already labeled
-		self.currentCells = extract_current_cell_out( self.cellPosDF, self.cellOutDF, self.tp.value() )
-		self.currentDriftedCells = extract_current_cell_fluo( self.cellFluoDF, self.tp.value() )
-		print(self.currentCells)
+		self.currentCells = extract_current_cell_fluo( self.cellPosDF, self.cellOutDF, self.cellFluoDF, self.tp.value() )
 
 		# if there are cells labeled and if the previously currently analyzed cell is present, set it as the currently labeled cell and select the right slice
 		if len(self.currentCells) > 0:
+			print('cells detected')
 
 			### update currently analyzed cell
 			if self.analyzedCell not in list( self.currentCells.cname ):
 				self.analyzedCell = self.currentCells.cname[0]
 
-			### update slice
-			self.sl.setValue( self.currentCells.ix[ self.currentCells.cname == self.analyzedCell, 'Z' ] )
+			### update slice, if it's the same slice number, manually replot the images
+			newslice = self.currentCells.ix[ self.currentCells.cname == self.analyzedCell, 'Z' ].values[0]
+			if newslice != self.sl.value():
+				self.sl.setValue( newslice )
 
-		# if the BC bound are different, the BCsliderMinMax will automatically update all canvases. Otherwise, manually update it!
-		newmax = np.max( [ np.max(self.stacks[ch]) for ch in self.channels ] )
-		if prevmax != newmax:
-			self.setBCslidersMinMax()            
-		else:
+			else:
+				self.updateAllCanvas()
+		# if no cells are found, manually plot the blank images
+		elif len(self.currentCells) == 0:
 			self.updateAllCanvas()
+
+		# update the BC
+		self.setBCslidersMinMax()            
 
 	def saveData(self):
 
@@ -450,6 +456,7 @@ class GUI(QtGui.QWidget):
 		# plot cell pos and name
 		self.text_c1 = []
 		self.out_c1 = []
+		self.center_c1 = []
 		self.outDrift_c1 = []
 		self.centerDrift_c1 = []
 
@@ -484,8 +491,11 @@ class GUI(QtGui.QWidget):
 			self.canvas1.draw()
 			return
 
+		# current cell
+		currentCell = self.currentCells.ix[ self.currentCells.cname == self.analyzedCell ].squeeze()
+
 		# extract current cell data
-		pos = extract_3Dpos( self.currentCells.ix[ self.currentCells.cname == self.analyzedCell ].squeeze() )
+		pos = extract_3Dpos( currentCell )
 
 		# plot the image
 		imgpxl = 50
@@ -500,18 +510,25 @@ class GUI(QtGui.QWidget):
 					rotation=0, fontsize = 20 ) )
 
 		### draw outline
-		outline = extract_out( self.currentCells.ix[ self.currentCells.cname == self.analyzedCell ].squeeze() )
+		outline = extract_out( currentCell )
 
 		# print(self.currentCells.ix[ self.currentCells.cname == self.analyzedCell ].squeeze())
 
 		if len( outline ) > 1:
 			outline = np.vstack( [ outline, outline[0] ] )
 
-		self.plot_c1.append( self.ax1.plot( outline[:,0], outline[:,1], '-x', color='yellow', ms=2, alpha=1., lw = .5 )[0] )
+		self.out_c1.append( self.ax1.plot( outline[:,0], outline[:,1], '-x', color='yellow', ms=2, alpha=1., lw = .5 )[0] )
+		self.center_c1.append( self.ax1.plot( 25, 25, 'o', color = 'yellow', mew = 0. )[0] )
 
 		# draw drifted outline
-		drift
-
+		if self._488nmBtn.isChecked():
+			drift = extract_pos488(currentCell) - extract_pos(currentCell)
+		elif self._561nmBtn.isChecked():
+			drift = extract_pos561(currentCell) - extract_pos(currentCell)
+		else:
+			drift = np.array([np.nan,np.nan])
+		self.outDrift_c1.append( self.ax1.plot( drift[0] + outline[:,0], drift[1] + outline[:,1], '-x', color='red', ms=2, alpha=1., lw = .5 )[0] )
+		self.centerDrift_c1.append( self.ax1.plot( 25 + drift[0], 25 + drift[1], 'o', color = 'red', mew = 0. )[0] )
 
 		# # redraw the canvas
 		self.canvas1.draw()
@@ -581,13 +598,7 @@ class GUI(QtGui.QWidget):
 
 	def changeSpaceTime(self, whatToChange, increment):
 
-
 		if whatToChange == 'time':
-
-			newCellOutDF = update_cell_out_DF( self.currentCells, self.cellOutDF, self.tp.value() )
-			self.cellOutDF = newCellOutDF
-
-			# if they are OK (and not going to negative times), change timepoint
 			self.tp.setValue( self.tp.value() + increment )
 
 		if whatToChange == 'space':
@@ -598,7 +609,6 @@ class GUI(QtGui.QWidget):
 		path = self.path
 		worm = self.worm
 
-		print( path, worm )
 		rawImgsPath = os.path.join( path, worm + '_analyzedImages' )
 
 		imgpxl = 50
@@ -607,119 +617,93 @@ class GUI(QtGui.QWidget):
 		paramsDF = self.paramsDF
 		timesDF = self.timesDF
 		gpDF = self.gpDF
-		cellPosDF = self.cellPosDF
-		cellOutDF = self.cellOutDF
-		cellFluoDF = self.cellFluoDF
 
 		currentCells = self.currentCells
 
 		# load darkField
 		darkField = load_stack( 'X:\\Orca_calibration\\AVG_darkField.tif' )
 
-		channels = [ '488nm' ]
-		for channel in channels:
+		if self._488nmBtn.isChecked():
+			channel = '488nm'
+		elif self._561nmBtn.isChecked():
+			channel = '561nm'
+		else:
+			QtGui.QMessageBox.about(self, 'Warning', 'Select a proper fluorescence channel!')
+			return
 
-			print(channel)
+		# load flatField
+		flatField = load_stack( os.path.join( path, 'AVG_flatField_'+channel+'.tif' ) )
+		medianCorrection = np.median( ( flatField - darkField ) )
 
-			# load flatField
-			flatField = load_stack( os.path.join( path, 'AVG_flatField_'+channel+'.tif' ) )
-			medianCorrection = np.median( ( flatField - darkField ) )
+		# for idx, trow in timesDF.ix[ timesDF.tidxRel == 58 ].iterrows(): ### THIS IS TO TEST A PARTICULAR TIMEPOINT!!!
+		trow = self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value() ].squeeze()
 
-			# for idx, trow in timesDF.ix[ timesDF.tidxRel == 58 ].iterrows(): ### THIS IS TO TEST A PARTICULAR TIMEPOINT!!!
-			for idx, trow in timesDF.iterrows():
+		# if there is the cropped image
+		if not os.path.isfile( os.path.join( rawImgsPath, trow.fName + channel + '.tif' ) ):
+			QtGui.QMessageBox.about(self, 'Warning', 'No croped image found!')
 
-				# if there is the cropped image
-				if os.path.isfile( os.path.join( rawImgsPath, trow.fName + channel + '.tif' ) ):
+		else:
 
-					print('tidx: ' + str( trow.tidxRel ), trow.fName, trow.timesRel )
+			# find all cells labeled in the timepoint
+			gonadPos = extract_pos( gpDF.ix[ gpDF.tidx == trow.tidxRel ].squeeze() )
 
-					# find all cells labeled in the timepoint
-					gonadPos = extract_pos( gpDF.ix[ gpDF.tidx == trow.tidxRel ].squeeze() )
+			# load the stack and perform FF correction
+			imgs = self.stacks[self.currentChannel]
+			imgsCorr = flat_field_correction( imgs, darkField, flatField, gonadPos )
 
-					# load the stack and perform FF correction
-					imgs = load_stack( os.path.join( rawImgsPath, trow.fName + channel + '.tif' ) )
-					imgsCorr = flat_field_correction( imgs, darkField, flatField, gonadPos )
+			### for each labeled cell, calculate the signal
+			cell = self.currentCells.ix[ self.currentCells.cname == self.analyzedCell ].squeeze()
+			# print(cell)
 
-					# print('current cells:')
-					# print(currentCells)
+			### if there is an outline
+			if is_outline_cell( cell ):
 
-					### for each labeled cell, calculate the signal
-					for jdx, cell in currentCells.iterrows():
+				print('detected cell/background with outline: ', cell.cname)
 
-						### if there is an outline
-						if is_outline_cell( cell ):
+				cellPos = extract_3Dpos( cell )
+				cellOut = extract_out( cell )
 
-							print('detected cell/background with outline: ', cell.cname)
+				### find the XYpos with maximum intensity
+				imgCorr = imgsCorr[cellPos[2],cellPos[1]-imgpxl/2:cellPos[1]+imgpxl/2+1,cellPos[0]-imgpxl/2:cellPos[0]+imgpxl/2+1]
 
-							cellPos = extract_3Dpos( cell )
-							cellOut = extract_out( cell )
+				if not cell.cname[:2] == 'b_':
 
-							### find the XYpos with maximum intensity
+					## this is for the cells - WITH DRIFT CORRECTION
+					_range = 5
+					signals = np.zeros((2*_range+1,2*_range+1))
 
-							if not cell.cname[:2] == 'b_':
+					for i in np.arange(2*_range+1):
+						for j in np.arange(2*_range+1):
+							signals[i,j] = calculate_fluo_intensity( imgCorr, np.array([i-_range,j-_range]), cellOut )
 
-								## this is for the cells - WITH DRIFT CORRECTION
-								_range = 10
-								signals = np.zeros((2*_range+1,2*_range+1))
+					drift = np.array( [ np.where(signals == np.max(signals))[0][0], np.where(signals == np.max(signals))[1][0] ] ) - _range
+					# print(drift)
+					signal = np.max( signals )
 
-								for i in np.arange(2*_range+1):
-									for j in np.arange(2*_range+1):
-										signals[i,j] = calculate_fluo_intensity( imgsCorr, imgpxl, cellPos+np.array([i-_range,j-_range,0]), cellOut )
+				else:
 
-								# print( np.where(signals == np.max(signals)) )
-								drift = np.array( [ np.where(signals == np.max(signals))[0][0], np.where(signals == np.max(signals))[1][0] ] ) - _range
-								# print(drift)
-								signal = np.max( signals )
+					### this is for backgrounds in which an outline has been drawn
+					signal = calculate_fluo_intensity( imgCorr, cellPos, cellOut )
+					drift = [ 0, 0 ]
 
-							else:
+			else:
 
-								### this is for backgrounds in which an outline has been drawn
-								signal = calculate_fluo_intensity( imgsCorr, imgpxl, cellPos, cellOut )
+				### if the outline of the background has not been drawn, just take a small area arund its center
+				if cell.cname[:2] == 'b_':
 
-								drift = [ 0, 0 ]
+					print('detected background without outline: ', cell.cname)
 
-							# plt.figure()
-							# plt.imshow(signals)
+					cellPos = extract_3Dpos( cell )
 
-							# plt.figure()
-							# plt.imshow( imgsCorr[ cell.Z, cell.Y-25:cell.Y+25, cell.X-25:cell.X+25 ], cmap = 'gray', interpolation = 'nearest', clim = [0,4000] )
-							# plt.plot(np.append(cell.Xout,cell.Xout[0]),np.append(cell.Yout,cell.Yout[0]),'-o',color='yellow')
-							# print(signal)
-							# plt.figure()
-							# plt.imshow( imgsCorr[ cell.Z, cell.Y+drift[1]-25:cell.Y+drift[1]+25, cell.X+drift[0]-25:cell.X+drift[0]+25 ], cmap = 'gray', interpolation = 'nearest' )
-							# plt.plot(np.append(cell.Xout,cell.Xout[0]),np.append(cell.Yout,cell.Yout[0]),'-o',color='red')
+					signal = calculate_fluo_intensity_bckg( imgCorr, 6, cellPos )
 
-						else:
+					drift = [ 0, 0 ]
 
-							### if the outline of the background has not been drawn, just take a small area arund its center
-							if cell.cname[:2] == 'b_':
+			### update the currentCells dataframe
+			newCurrentCells = update_current_cell_fluo( self.currentCells, cell, channel, drift, signal )
+			self.currentCells = newCurrentCells
 
-								print('detected background without outline: ', cell.cname)
-			
-								cellPos = extract_3Dpos( cell )
-
-								signal = calculate_fluo_intensity_bckg( imgsCorr, 6, cellPos )
-
-								drift = [ 0, 0 ]
-
-						### update the full dictionary
-						newCellFluoDF = update_cell_fluo_DF( cellFluoDF, trow, cell, channel, drift, signal )
-						self.cellFluoDF = newCellFluoDF
-
-					# currentCells = extract_current_cell_fluo( cellFluoDF, trow.tidxRel )
-					# print(currentCells)
 		self.updateCanvas1()
-
-
-	# if __name__ == '__main__':
-
-
-	# 	path = 'X:\\Simone\\160129_MCHERRY_HLH2GFP_onHB101'
-
-	# 	worms = ['C19']
-
-	# 	for w in worms:
-	# 	    computeFluorescence( path = path, worm = w, channels = ['488nm'] )
 
 
 
@@ -736,33 +720,4 @@ if __name__ == '__main__':
     
 
 
-
-
-
-# import glob
-# from tifffile import *
-# from generalFunctions import *
-# import numpy as np
-# import os.path
-# import matplotlib.pyplot as plt
-# from matplotlib.path import Path
-# import pickle
-# import scipy.interpolate as ip
-# from scipy.stats import gaussian_kde
-# from scipy import interpolate
-# import shutil
-
-# import os
-# import matplotlib as mpl
-# mpl.rcParams['pdf.fonttype'] = 42
-
-# if __name__ == '__main__':
-
-
-# 	path = 'X:\\Simone\\160129_MCHERRY_HLH2GFP_onHB101'
-
-# 	worms = ['C19']
-
-# 	for w in worms:
-# 	    computeFluorescence( path = path, worm = w, channels = ['488nm'] )
 
