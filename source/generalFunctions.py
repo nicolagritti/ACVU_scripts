@@ -86,10 +86,10 @@ def crop_image( imgs, c, size ):
         cropstack = np.zeros( ( size, size ) )
 
         cropstack[
-                    -np.min( [ c[1]-size/2, 0 ] ) : size-np.max( [ c[1]+size/2-dim[1]+1, 0 ] ) , 
-                    -np.min( [ c[0]-size/2, 0 ] ) : size-np.max( [ c[0]+size/2-dim[2]+1, 0 ] ) ] = imgs[
-                    np.max( [ c[1]-size/2, 0 ] ) : np.min( [ c[1]+size/2, dim[1]-1 ] ) , 
-                    np.max( [ c[0]-size/2, 0 ] ) : np.min( [ c[0]+size/2, dim[2]-1 ] ) ]
+                    -np.min( [ c[1]-size/2, 0 ] ) : size-np.max( [ c[1]+size/2-dim[0]+1, 0 ] ) , 
+                    -np.min( [ c[0]-size/2, 0 ] ) : size-np.max( [ c[0]+size/2-dim[1]+1, 0 ] ) ] = imgs[
+                    np.max( [ c[1]-size/2, 0 ] ) : np.min( [ c[1]+size/2, dim[0]-1 ] ) , 
+                    np.max( [ c[0]-size/2, 0 ] ) : np.min( [ c[0]+size/2, dim[1]-1 ] ) ]
 
     return cropstack
 
@@ -117,6 +117,18 @@ def mag2pxlsize(magnification):
 
 def extract_pos( series ):
     return np.array( [ series.X, series.Y ] )
+
+def extract_pos488( series ):
+    return np.array( [ series.X488nm, series.Y488nm ] )
+
+def extract_pos561( series ):
+    return np.array( [ series.X561nm, series.Y561nm ] )
+
+def extract_488( series ):
+    return series._488nm
+
+def extract_561( series ):
+    return series._561nm
 
 def extract_3Dpos( series ):
     return np.array( [ series.X, series.Y, series.Z ] )
@@ -261,6 +273,18 @@ def first_tidx_pos_single_cell( cell ):
 
     return firsttidx
 
+def last_tidx_pos_single_cell( cell ):
+
+    cell.isThere = np.isnan( cell.X.values ) == False
+
+    if np.sum( cell.isThere ) > 0:
+        lasttidx = np.max( cell.ix[ cell.isThere == True, 'tidx' ] )
+
+    else:
+        lasttidx = np.nan
+
+    return lasttidx
+
 def create_cell_pos( tDF, cNames ):
 
     singleCell = pd.DataFrame( { 'tidx': tDF.tidxRel,
@@ -357,6 +381,20 @@ def first_tidx_pos_all_cells( dictionary ):
 
     return firsttidx
 
+def last_tidx_pos_all_cells( dictionary ):
+
+    tps = []
+    
+    for cname in dictionary.keys():
+        tps.append( last_tidx_pos_single_cell( dictionary[ cname ] ) )
+
+    lasttidx = np.nanmax( tps )
+
+    if np.isnan( lasttidx ):
+        lasttidx = 0
+
+    return lasttidx
+
 def is_outline_cell( cell ):
 
     if len( cell.Xout ) > 1:
@@ -367,15 +405,15 @@ def is_outline_cell( cell ):
 def create_cell_out( tDF, cNames ):
 
     singleCell = pd.DataFrame( { 'tidx': tDF.tidxRel,
-            'X': np.nan,
-            'Y': np.nan } )
+            'Xout': np.nan,
+            'Yout': np.nan } )
 
-    singleCell.X = singleCell.X.astype(object)
-    singleCell.Y = singleCell.Y.astype(object)
+    singleCell.Xout = singleCell.Xout.astype(object)
+    singleCell.Yout = singleCell.Yout.astype(object)
 
     for idx, row in singleCell.iterrows():
-        singleCell.X.values[ idx ] = np.array( [ np.nan ] )
-        singleCell.Y.values[ idx ] = np.array( [ np.nan ] )
+        singleCell.Xout.values[ idx ] = np.array( [ np.nan ] )
+        singleCell.Yout.values[ idx ] = np.array( [ np.nan ] )
 
     cellOutDF = { cn: singleCell.copy() for cn in cNames }
 
@@ -394,10 +432,10 @@ def extract_current_cell_out( dict_pos, dict_out, tp ):
 
         for idx, row in cellsDF.iterrows():
 
-            outline = extract_pos( dict_out[ row.cname ].ix[ dict_out[ row.cname ].tidx == tp ].squeeze() )
+            outline = extract_out( dict_out[ row.cname ].ix[ dict_out[ row.cname ].tidx == tp ].squeeze() )
 
-            cellsDF.Xout.values[ idx ] = outline[0]
-            cellsDF.Yout.values[ idx ] = outline[1]
+            cellsDF.Xout.values[ idx ] = outline[:,0]
+            cellsDF.Yout.values[ idx ] = outline[:,1]
     # print(cellsDF)
 
     return cellsDF
@@ -412,8 +450,8 @@ def update_cell_out_DF( currentCells, cellOutDF, tp ):
 
         index = newCell.ix[ newCell.tidx == tp ].index
 
-        newCell.X.values[index] = [ np.array( [ np.nan ] ) ]
-        newCell.Y.values[index] = [ np.array( [ np.nan ] ) ]
+        newCell.Xout.values[index] = [ np.array( [ np.nan ] ) ]
+        newCell.Yout.values[index] = [ np.array( [ np.nan ] ) ]
 
         newCellOutDF[ cname ] = newCell
 
@@ -422,8 +460,8 @@ def update_cell_out_DF( currentCells, cellOutDF, tp ):
 
         index = newCellOutDF[ cell.cname ].ix[ newCellOutDF[ cell.cname ].tidx == tp ].index
 
-        newCellOutDF[ cell.cname ].X.values[index] = [ pos[:,0] ]
-        newCellOutDF[ cell.cname ].Y.values[index] = [ pos[:,1] ]
+        newCellOutDF[ cell.cname ].Xout.values[index] = [ pos[:,0] ]
+        newCellOutDF[ cell.cname ].Yout.values[index] = [ pos[:,1] ]
 
     return newCellOutDF
 
@@ -432,12 +470,12 @@ def update_cell_out_DF( currentCells, cellOutDF, tp ):
 def create_cell_fluo( tDF, cNames ):
 
     singleCell = pd.DataFrame( { 'tidx': tDF.tidxRel,
-            'fluo488nm': np.nan,
-            'fluo561nm': np.nan,
-            'fluo488nmXnewPos': np.nan,
-            'fluo488nmYnewPos': np.nan,
-            'fluo561nmXnewPos': np.nan,
-            'fluo561nmYnewPos': np.nan } )
+            '_488nm': np.nan,
+            '_561nm': np.nan,
+            'X488nm': np.nan,
+            'Y488nm': np.nan,
+            'X561nm': np.nan,
+            'Y561nm': np.nan } )
 
     cellFluoDF = { cn: singleCell.copy() for cn in cNames }
 
@@ -459,59 +497,106 @@ def flat_field_correction( imgs, darkField, flatField, gp ):
 
     return ( medianCorrection * num / den ).astype(np.uint16)
 
-def extract_current_cell_fluo( dictionary, tp ):
+def extract_current_cell_fluo( dict_pos, dict_out, dict_fluo, tp ):
 
-    info = []
-    for key in dictionary.keys():
-        cell = dictionary[ key ].ix[ dictionary[key].tidx == tp ].squeeze()
-        if not np.isnan( cell.fluo488nm ):
-            info.append( [ key, cell.fluo488nm, cell.fluo561nm,
-                cell.fluo488nmXnewPos, cell.fluo488nmYnewPos,
-                cell.fluo561nmXnewPos, cell.fluo561nmYnewPos ] )
+    cellsDF = extract_current_cell_out( dict_pos, dict_out, tp )
 
-    cellsDF = pd.DataFrame( { 'cname': [ row[0] for row in info ],
-                'fluo488nm': [ row[1] for row in info ],
-                'fluo561nm': [ row[2] for row in info ],
-                'fluo488nmXnewPos': [ row[3] for row in info ],
-                'fluo488nmYnewPos': [ row[4] for row in info ],
-                'fluo561nmXnewPos': [ row[5] for row in info ],
-                'fluo561nmYnewPos': [ row[6] for row in info ],
-                'tidx': tp  } )
+    if len(cellsDF) > 0:
+        cellsDF.ix[:,'_488nm'] = np.nan
+        cellsDF.ix[:,'_561nm'] = np.nan
+        cellsDF.ix[:,'X488nm'] = np.nan
+        cellsDF.ix[:,'X561nm'] = np.nan
+        cellsDF.ix[:,'Y488nm'] = np.nan
+        cellsDF.ix[:,'Y561nm'] = np.nan
+
+        for cname in dict_fluo.keys():
+            cell = dict_fluo[ cname ].ix[ dict_fluo[ cname ].tidx == tp ].squeeze()
+
+            pos488 = extract_pos488( cell )
+            pos561 = extract_pos561( cell )
+            _488 = extract_488( cell )
+            _561 = extract_561( cell )
+
+            cellsDF.ix[ cellsDF.cname == cname, '_488nm' ] = _488
+            cellsDF.ix[ cellsDF.cname == cname, '_561nm' ] = _561
+            cellsDF.ix[ cellsDF.cname == cname, 'X488nm' ] = pos488[0]
+            cellsDF.ix[ cellsDF.cname == cname, 'X561nm' ] = pos561[0]
+            cellsDF.ix[ cellsDF.cname == cname, 'Y488nm' ] = pos488[1]
+            cellsDF.ix[ cellsDF.cname == cname, 'Y561nm' ] = pos561[1]
 
     return cellsDF
 
-def calculate_fluo_intensity( imgs, imgpxl, center, outline ):
+def update_cell_fluo_DF( currentCells, cellFluoDF, tp ):
 
-    img = imgs[ center[2], center[1]-imgpxl/2:center[1]+imgpxl/2, center[0]-imgpxl/2:center[0]+imgpxl/2 ]
+    newCellFluoDF = { cn: np.nan for cn in cellFluoDF.keys() }
 
-    vertices = np.array( [ np.append(outline[:,0],outline[0,0]), np.append(outline[:,1],outline[0,1]) ] ).T
+    for cname in cellFluoDF.keys():
+
+        newCell = cellFluoDF[cname].copy()
+
+        index = newCell.ix[ newCell.tidx == tp ].index
+
+        newCell._488nm.values[index] = np.nan
+        newCell._561nm.values[index] = np.nan
+        newCell.X488nm.values[index] = np.nan
+        newCell.Y488nm.values[index] = np.nan
+        newCell.X561nm.values[index] = np.nan
+        newCell.Y561nm.values[index] = np.nan
+
+        newCellFluoDF[ cname ] = newCell
+
+    for idx, cell in currentCells.iterrows():
+        pos488 = extract_pos488( cell )
+        pos561 = extract_pos561( cell )
+        _488 = extract_488( cell )
+        _561 = extract_561( cell )
+
+        newCellFluoDF[ cell.cname ].ix[ newCellFluoDF[ cell.cname ].tidx == tp, 'X488nm' ] = pos488[0]
+        newCellFluoDF[ cell.cname ].ix[ newCellFluoDF[ cell.cname ].tidx == tp, 'Y488nm' ] = pos488[1]
+        newCellFluoDF[ cell.cname ].ix[ newCellFluoDF[ cell.cname ].tidx == tp, 'X561nm' ] = pos561[0]
+        newCellFluoDF[ cell.cname ].ix[ newCellFluoDF[ cell.cname ].tidx == tp, 'Y561nm' ] = pos561[1]
+        newCellFluoDF[ cell.cname ].ix[ newCellFluoDF[ cell.cname ].tidx == tp, '_488nm' ] = _488
+        newCellFluoDF[ cell.cname ].ix[ newCellFluoDF[ cell.cname ].tidx == tp, '_561nm' ] = _561
+
+    return newCellFluoDF
+
+def calculate_fluo_intensity( img, center, outline ):
+
+    imgpxl = img.shape[0]
+
+    vertices = np.array( [ center[0] + np.append(outline[:,0],outline[0,0]), center[1] + np.append(outline[:,1],outline[0,1]) ] ).T
 
     p = Path(vertices)
     
     # create the mask (image full of 0 and 1, the 1s are wherethe cell is)
     points = [ (i,j) for i in np.arange(imgpxl) for j in np.arange(imgpxl) ]
     mask = p.contains_points(points).reshape(imgpxl,imgpxl).T
+
     # plt.figure()
     # plt.imshow(mask)
+    # plt.show()
+    # plt.figure()
+    # plt.imshow(img)
+    # plt.show()
 
     return np.sum( mask * img ) / np.sum( mask )
 
-def calculate_fluo_intensity_bckg( imgs, imgpxl, center ):
+def calculate_fluo_intensity_bckg( img, imgpxl, center ):
 
-    img = imgs[ center[2], center[1]-imgpxl/2:center[1]+imgpxl/2, center[0]-imgpxl/2:center[0]+imgpxl/2 ]
+    img = img[ center[1]-imgpxl/2:center[1]+imgpxl/2, center[0]-imgpxl/2:center[0]+imgpxl/2 ]
     size = len( img.flatten() )
 
     return np.sum( img ) / size
 
-def update_cell_fluo_DF( cellFluoDF, trow, cell, channel, drift, signal ):
+def update_current_cell_fluo( currentCells, cell, channel, drift, signal ):
 
-    newCellFluoDF = cellFluoDF.copy()
+    newCurrentCells = currentCells.copy()
 
-    newCellFluoDF[ cell.cname ].ix[ newCellFluoDF[ cell.cname ].tidx == trow.tidxRel, 'fluo' + channel ] = signal
-    newCellFluoDF[ cell.cname ].ix[ newCellFluoDF[ cell.cname ].tidx == trow.tidxRel, 'fluo' + channel + 'XnewPos' ] = cell.X + drift[0]
-    newCellFluoDF[ cell.cname ].ix[ newCellFluoDF[ cell.cname ].tidx == trow.tidxRel, 'fluo' + channel + 'YnewPos' ] = cell.Y + drift[1]
+    newCurrentCells.ix[ newCurrentCells.cname == cell.cname, '_' + channel ] = signal
+    newCurrentCells.ix[ newCurrentCells.cname == cell.cname, 'X' + channel ] = int( cell.X + drift[0] )
+    newCurrentCells.ix[ newCurrentCells.cname == cell.cname, 'Y' + channel ] = int( cell.Y + drift[1] )
 
-    return newCellFluoDF
+    return newCurrentCells
 
 
 def find_interesting_cells( currentCells ):

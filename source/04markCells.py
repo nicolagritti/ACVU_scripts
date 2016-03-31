@@ -145,7 +145,8 @@ class GUI(QtGui.QWidget):
         loadBtn.clicked.connect(self.selectWorm)
         saveBtn.clicked.connect(self.saveData)
 
-        self.tp.valueChanged.connect(self.loadNewStack)
+        self.checkNames = True
+        self.tp.valueChanged.connect(self.changeTp)
         self.sl.valueChanged.connect(self.updateCanvas1)
         self.sld1.valueChanged.connect(self.updateBC)
         self.sld2.valueChanged.connect(self.updateBC)
@@ -175,7 +176,7 @@ class GUI(QtGui.QWidget):
     def selectWorm(self):
 
         ### store the folders
-        self.pathDial = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder', 'C:\\Users\\Nicola\\Dropbox\\PhD\\Codes\\test')#'Y:\\Images')
+        self.pathDial = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder', 'X:\\Simone\\160129_MCHERRY_HLH2GFP_onHB101')#'Y:\\Images')
         self.worm = self.pathDial.split("\\")[-1].split('_')[0]
         self.path = os.path.dirname( self.pathDial )
         self.setWindowTitle('Mark Cells - ' + self.pathDial)
@@ -213,6 +214,7 @@ class GUI(QtGui.QWidget):
 
         ### detect size of the cropped images
         tp = np.min( self.gpDF.ix[ pd.notnull( self.gpDF.X ), 'tidx' ] )
+        self.prevtp = tp-1
         tRow = self.timesDF.ix[ self.timesDF.tidxRel == tp ].squeeze()
         fileName = os.path.join( self.pathDial, tRow.fName + 'CoolLED.tif')
         firststack = load_stack( fileName )
@@ -237,10 +239,7 @@ class GUI(QtGui.QWidget):
         ### set the max slice number
         self.sl.setMaximum( self.nslices-1 )
 
-        if tp != self.tp.value():
-            self.tp.setValue( tp )
-        else:
-            self.loadNewStack()
+        self.tp.setValue( tp )
 
         self.CoolLEDBtn.setChecked(True)    # this uppdates the canvas1 once more
 
@@ -248,9 +247,6 @@ class GUI(QtGui.QWidget):
         self.setFocus()
 
     def loadNewStack(self):
-
-        # before changing timepoint, print labeled cells and check if they are OK
-        print( 'cells labeled:\n ', self.currentCells )
 
         # print(self.fList['gfp'][self.tp.value()])
         tRow = self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value() ].squeeze()
@@ -280,17 +276,38 @@ class GUI(QtGui.QWidget):
             else:
                 self.stacks[ch] = prevmax*np.ones((self.nslices,self.cropsize,self.cropsize))
                 
-        ### extract current cells already labeled
-        self.currentCells = extract_current_cell_pos( self.cellPosDF, self.tp.value() )
-
         # if the BC bound are different, the BCsliderMinMax will automatically update canvas1. Otherwise, manually update it!
-        newmax = np.max( [ np.max(self.stacks[ch]) for ch in self.channels ] )
-        if prevmax != newmax:
-            self.setBCslidersMinMax()            
-        else:
-            self.updateCanvas1()
-    
+        self.setBCslidersMinMax()            
+
+        self.updateCanvas1()    
         self.updateCanvas2()
+
+    def changeTp( self ):
+
+        # if it's the second time you are checking the same tp, don't do anything
+        if self.checkNames:
+            cellFine = self.checkConsistencyCellNames()
+        else:
+            return
+
+        # before changing timepoint, print labeled cells and check if they are OK
+        print( 'cells labeled:\n ', self.currentCells )
+
+        ### extract current cells already labeled
+        self.newCells = extract_current_cell_pos( self.cellPosDF, self.tp.value() )
+
+        if cellFine:
+            # if everything fine, load the new stack
+            self.currentCells = self.newCells
+            self.loadNewStack()
+        else:
+            # otherwise, go back to prev tp
+            self.checkNames = False
+            self.tp.setValue( self.prevtp )
+            self.checkNames = True
+
+        self.prevtp = self.tp.value()
+
 
     def saveData(self):
         
@@ -558,7 +575,7 @@ class GUI(QtGui.QWidget):
 
     def checkConsistencyCellNames( self ):
         ### check consistency of cell names
-        tp = self.tp.value()
+        tp = self.prevtp
 
         # if no cells are labeled (currentCells df is empty), remove all labeled cells in the cellPosDF and return
         if len( self.currentCells ) == 0:
@@ -582,12 +599,9 @@ class GUI(QtGui.QWidget):
 
     def changeSpaceTime(self, whatToChange, increment):
 
-
         if whatToChange == 'time':
             # if they are OK (and not going to negative times), change timepoint
-            if self.checkConsistencyCellNames() :
-                print('tp changed')
-                self.tp.setValue( self.tp.value() + increment )
+            self.tp.setValue( self.tp.value() + increment )
 
         if whatToChange == 'space':
             self.sl.setValue( self.sl.value() + increment )
@@ -605,4 +619,3 @@ if __name__ == '__main__':
     sys.exit( app.exec_() )
     
 
-# print(MultiImage('X:\\Simone\\test\\C01_analyzedImages\\z002_488nm.tif'))
