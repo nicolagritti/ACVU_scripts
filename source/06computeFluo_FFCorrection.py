@@ -284,7 +284,7 @@ class GUI(QtGui.QWidget):
 
 		# update the cell outline data frame before updating the images and retrireving new cells
 		newCellFluoDF = update_cell_fluo_DF( self.currentCells, self.cellFluoDF, self.prevtp )
-		self.cellFluoDF = newCellFluoDF.copy()
+		self.cellFluoDF = newCellFluoDF
 		self.prevtp = self.tp.value()
 
 		# before changing timepoint, print labeled cells and check if they are OK
@@ -472,6 +472,10 @@ class GUI(QtGui.QWidget):
 		# update the current cells
 		newCurrentCells = update_current_cell_fluo( self.currentCells, cell, channel, drift, signal )
 		self.currentCells = newCurrentCells
+
+		# update the cell outline data frame before updating the images and retrireving new cells
+		newCellFluoDF = update_cell_fluo_DF( self.currentCells, self.cellFluoDF, self.tp.value() )
+		self.cellFluoDF = newCellFluoDF.copy()
 
 		# update canvas
 		self.updateCanvas1()
@@ -753,6 +757,10 @@ class GUI(QtGui.QWidget):
 			### update the currentCells dataframe
 			newCurrentCells = update_current_cell_fluo( self.currentCells, cell, channel, drift, signal )
 			self.currentCells = newCurrentCells
+
+			# update the cell outline data frame before updating the images and retrireving new cells
+			newCellFluoDF = update_cell_fluo_DF( self.currentCells, self.cellFluoDF, self.tp.value() )
+			self.cellFluoDF = newCellFluoDF.copy()
 
 		self.updateCanvas1()
 
