@@ -23,6 +23,7 @@ from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends import qt_compat
 import glob
 import pandas as pd
+import time
 use_pyside = qt_compat.QT_API == qt_compat.QT_API_PYSIDE
 
 class GUI(QtGui.QWidget):
@@ -66,12 +67,16 @@ class GUI(QtGui.QWidget):
 		# DEFINE ALL WIDGETS AND BUTTONS
 
 		loadBtn = QtGui.QPushButton('Load DataSet')
-		computeBtn = QtGui.QPushButton('Compute signal with automatic drift correction')
+		computeBtn = QtGui.QPushButton('Compute current image')
+		computeBtn.setFixedWidth(200)
+		self.computeAllBtn = QtGui.QPushButton('Compute %s signal for all the images' %'???')
+		self.computeAllBtn.setFixedWidth(200)
 		saveBtn = QtGui.QPushButton('Save data (F12)')
 
 		tpLbl = QtGui.QLabel('Relative Tp:')
 		slLbl = QtGui.QLabel('Slice:')
 		fNameLbl = QtGui.QLabel('File name:')
+		gridLbl = QtGui.QLabel('Grid size:')
 
 		self.tp = QtGui.QSpinBox(self)
 		self.tp.setValue(-5)
@@ -80,6 +85,10 @@ class GUI(QtGui.QWidget):
 		self.sl = QtGui.QSpinBox(self)
 		self.sl.setValue(0)
 		self.sl.setMaximum(100000)
+
+		self.gridsize = QtGui.QSpinBox(self)
+		self.gridsize.setValue(5)
+		self.gridsize.setMaximum(20)
 
 		self.fName = QtGui.QLabel('')
 
@@ -132,7 +141,10 @@ class GUI(QtGui.QWidget):
 		Col2.addWidget(self.canvas1)
 
 		Col3.addWidget(self.canvas2)
-		Col1.addWidget(computeBtn,6,0)
+		Col1.addWidget(gridLbl,6,0)
+		Col1.addWidget(self.gridsize,6,1)
+		Col1.addWidget(computeBtn,7,0)
+		Col1.addWidget(self.computeAllBtn,8,0)
 
 		self.setFocus()
 		self.show()
@@ -152,6 +164,7 @@ class GUI(QtGui.QWidget):
 		self.CoolLEDBtn.toggled.connect(self.radioCoolLEDClicked)
 
 		computeBtn.clicked.connect(self.computeFluo)
+		self.computeAllBtn.clicked.connect(self.computeAllFluo)
 
 		self.fig1.canvas.mpl_connect('button_press_event',self.onMouseClickOnCanvas1)        
 		self.fig1.canvas.mpl_connect('scroll_event',self.wheelEvent)        
@@ -342,6 +355,7 @@ class GUI(QtGui.QWidget):
 		if enabled:
 			if '488nm' in self.channels:
 				self.currentChannel = '488nm'
+				self.computeAllBtn.setText('Compute %s signal for all the images' %'488nm')
 				self.setFocus()
 				self.updateAllCanvas()
 			else:
@@ -349,22 +363,24 @@ class GUI(QtGui.QWidget):
 				QtGui.QMessageBox.about(self, 'Warning', 'No 488nm channel!')
 
 	def radio561Clicked(self, enabled):
-	    print('radio 561 clicked')
+		print('radio 561 clicked')
 
-	    if enabled:
-	        if '561nm' in self.channels:
-	            self.currentChannel = '561nm'
-	            self.setFocus()
-	            self.updateAllCanvas()
-	        else:
-	            self.CoolLEDBtn.setChecked(True)
-	            QtGui.QMessageBox.about(self, 'Warning', 'No 561nm channel!')
+		if enabled:
+			if '561nm' in self.channels:
+				self.currentChannel = '561nm'
+				self.computeAllBtn.setText('Compute %s signal for all the images' %'561nm')
+				self.setFocus()
+				self.updateAllCanvas()
+			else:
+				self.CoolLEDBtn.setChecked(True)
+				QtGui.QMessageBox.about(self, 'Warning', 'No 561nm channel!')
 
 	def radioCoolLEDClicked(self, enabled):
 		print('radio LED clicked')
 
 		if enabled:
 			self.currentChannel = 'CoolLED'
+			self.computeAllBtn.setText('Computing CoolLED signal not available!')
 			self.setFocus()
 			self.updateAllCanvas()
 
@@ -420,8 +436,44 @@ class GUI(QtGui.QWidget):
 	#-----------------------------------------------------------------------------------------------
 
 	def onMouseClickOnCanvas1(self, event):
-		print('move center of the cell - TO BE IMPLEMENTED')
+		if self._488nmBtn.isChecked():
+			channel = '488nm'
+		elif self._561nmBtn.isChecked():
+			channel = '561nm'
+		else:
+			QtGui.QMessageBox.about(self, 'Warning', 'Select a proper fluorescence channel!')
+			return		
 
+		imgpxl = 50
+		cell = self.currentCells.ix[ self.currentCells.cname == self.analyzedCell ].squeeze()
+		cellPos = extract_3Dpos( cell )
+		cellOut = extract_out( cell )
+
+		# calculate new drift
+		pos = np.array( [ int(np.round(event.xdata)), int(np.round(event.ydata)) ] )
+		drift = np.array([pos[0]-imgpxl/2,pos[1]-imgpxl/2])
+
+		### perform flat field correction
+		# find gonadpos
+		gonadPos = extract_pos( self.gpDF.ix[ self.gpDF.tidx == self.tp.value() ].squeeze() )
+		# load darkField
+		darkField = load_stack( 'X:\\Orca_calibration\\AVG_darkField.tif' )
+		# load flatField
+		flatField = load_stack( os.path.join( self.path, 'AVG_flatField_'+channel+'.tif' ) )
+		medianCorrection = np.median( ( flatField - darkField ) )
+		#correct image	
+		imgs = self.stacks[self.currentChannel]
+		imgsCorr = flat_field_correction( imgs, darkField, flatField, gonadPos )
+		imgCorr = imgsCorr[cellPos[2],cellPos[1]-imgpxl/2:cellPos[1]+imgpxl/2+1,cellPos[0]-imgpxl/2:cellPos[0]+imgpxl/2+1]
+
+		### find the new signal
+		signal = calculate_fluo_intensity( imgCorr, np.array([pos[0]-imgpxl/2,pos[1]-imgpxl/2]), cellOut )
+
+		# update the current cells
+		newCurrentCells = update_current_cell_fluo( self.currentCells, cell, channel, drift, signal )
+		self.currentCells = newCurrentCells
+
+		# update canvas
 		self.updateCanvas1()
 		self.setFocus()
 		# print(event.button,event.xdata,event.ydata)
@@ -604,7 +656,7 @@ class GUI(QtGui.QWidget):
 		if whatToChange == 'space':
 			self.sl.setValue( self.sl.value() + increment )
 
-	def computeFluo( self ):#path, worm, channels = ['488nm'] ):
+	def computeFluo( self ):
 
 		path = self.path
 		worm = self.worm
@@ -653,23 +705,22 @@ class GUI(QtGui.QWidget):
 
 			### for each labeled cell, calculate the signal
 			cell = self.currentCells.ix[ self.currentCells.cname == self.analyzedCell ].squeeze()
-			# print(cell)
+			cellPos = extract_3Dpos( cell )
+
+			### find the XYpos with maximum intensity
+			imgCorr = imgsCorr[cellPos[2],cellPos[1]-imgpxl/2:cellPos[1]+imgpxl/2+1,cellPos[0]-imgpxl/2:cellPos[0]+imgpxl/2+1]
 
 			### if there is an outline
 			if is_outline_cell( cell ):
 
 				print('detected cell/background with outline: ', cell.cname)
 
-				cellPos = extract_3Dpos( cell )
 				cellOut = extract_out( cell )
-
-				### find the XYpos with maximum intensity
-				imgCorr = imgsCorr[cellPos[2],cellPos[1]-imgpxl/2:cellPos[1]+imgpxl/2+1,cellPos[0]-imgpxl/2:cellPos[0]+imgpxl/2+1]
 
 				if not cell.cname[:2] == 'b_':
 
 					## this is for the cells - WITH DRIFT CORRECTION
-					_range = 5
+					_range = self.gridsize.value()
 					signals = np.zeros((2*_range+1,2*_range+1))
 
 					for i in np.arange(2*_range+1):
@@ -704,6 +755,27 @@ class GUI(QtGui.QWidget):
 			self.currentCells = newCurrentCells
 
 		self.updateCanvas1()
+
+	def computeAllFluo( self ):
+
+		if self.CoolLEDBtn.isChecked():
+			QtGui.QMessageBox.about(self, 'Warning', 'Select a proper fluorescence channel!')
+			return
+
+		firsttp = first_tidx_pos_all_cells( self.cellPosDF )
+		lasttp = last_tidx_pos_all_cells( self.cellPosDF )
+
+		for idx, trow in self.timesDF.ix[ ( self.timesDF.tidxRel <= lasttp ) & ( self.timesDF.tidxRel >= firsttp ) ].iterrows():
+			self.tp.setValue(trow.tidxRel)
+
+			for jdx, cell in self.currentCells.iterrows():
+				self.analyzedCell = cell.cname
+				self.computeFluo()
+				# time.sleep(3)
+
+		self.tp.setValue( firsttp )
+
+
 
 
 

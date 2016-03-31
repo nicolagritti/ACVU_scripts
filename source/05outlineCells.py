@@ -417,7 +417,7 @@ class GUI(QtGui.QWidget):
 
 	def onMouseClickOnCanvas1(self, event):
 
-		pos = np.array( [ int(event.xdata), int(event.ydata) ] )
+		pos = np.array( [ int(np.round(event.xdata)), int(np.round(event.ydata)) ] )
 
 		outline = extract_out( self.currentCells.ix[ self.currentCells.cname == self.analyzedCell ].squeeze() )
 

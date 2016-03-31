@@ -273,6 +273,18 @@ def first_tidx_pos_single_cell( cell ):
 
     return firsttidx
 
+def last_tidx_pos_single_cell( cell ):
+
+    cell.isThere = np.isnan( cell.X.values ) == False
+
+    if np.sum( cell.isThere ) > 0:
+        lasttidx = np.max( cell.ix[ cell.isThere == True, 'tidx' ] )
+
+    else:
+        lasttidx = np.nan
+
+    return lasttidx
+
 def create_cell_pos( tDF, cNames ):
 
     singleCell = pd.DataFrame( { 'tidx': tDF.tidxRel,
@@ -368,6 +380,20 @@ def first_tidx_pos_all_cells( dictionary ):
         firsttidx = 0
 
     return firsttidx
+
+def last_tidx_pos_all_cells( dictionary ):
+
+    tps = []
+    
+    for cname in dictionary.keys():
+        tps.append( last_tidx_pos_single_cell( dictionary[ cname ] ) )
+
+    lasttidx = np.nanmax( tps )
+
+    if np.isnan( lasttidx ):
+        lasttidx = 0
+
+    return lasttidx
 
 def is_outline_cell( cell ):
 
@@ -555,9 +581,9 @@ def calculate_fluo_intensity( img, center, outline ):
 
     return np.sum( mask * img ) / np.sum( mask )
 
-def calculate_fluo_intensity_bckg( imgs, imgpxl, center ):
+def calculate_fluo_intensity_bckg( img, imgpxl, center ):
 
-    img = imgs[ center[2], center[1]-imgpxl/2:center[1]+imgpxl/2, center[0]-imgpxl/2:center[0]+imgpxl/2 ]
+    img = img[ center[1]-imgpxl/2:center[1]+imgpxl/2, center[0]-imgpxl/2:center[0]+imgpxl/2 ]
     size = len( img.flatten() )
 
     return np.sum( img ) / size
