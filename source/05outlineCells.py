@@ -455,7 +455,7 @@ class GUI(QtGui.QWidget):
 		self.sld2.setMinimum(0)
 
 	def initializeCanvas1(self):
-		print('initializing canvas1')
+		# print('initializing canvas1')
 
 		self.fig1.clf()
 		self.fig1.subplots_adjust(left=0., right=1., top=1., bottom=0.)
@@ -480,7 +480,7 @@ class GUI(QtGui.QWidget):
 		self.setFocus()
 
 	def updateCanvas1(self):
-		print('updating canvas1')
+		# print('updating canvas1')
 
 		# clear cell text and points
 		# print(self.text1,self.points1)
@@ -528,7 +528,7 @@ class GUI(QtGui.QWidget):
 		self.setFocus()
 
 	def initializeCanvas2(self):
-		print('initializing canvas2')
+		# print('initializing canvas2')
 
 		self.fig2.clf()
 		self.fig2.subplots_adjust(left=0., right=1., top=1., bottom=0.)
@@ -553,7 +553,7 @@ class GUI(QtGui.QWidget):
 		self.setFocus()
 
 	def updateCanvas2(self):
-		print('updating canvas2')
+		# print('updating canvas2')
 
 		# plot the image
 		self.imgplot2.set_data( self.stacks[self.currentChannel][self.sl.value()] )

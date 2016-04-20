@@ -347,7 +347,7 @@ class GUI(QtGui.QWidget):
         self.setFocus()
         
     def updateCanvas1(self):
-        print('updating canvas1... ')
+        # print('updating canvas1... ')
         
         self.fName.setText( self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value(), 'fName' ].values[0] )
 

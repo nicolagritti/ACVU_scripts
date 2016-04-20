@@ -379,7 +379,14 @@ class GUI(QtGui.QWidget):
         # print gonad position
         gonadPos = extract_pos( self.gpDF.ix[ self.gpDF.tidx == self.tp.value() ].squeeze() ) / self.compression
         if len( gonadPos.shape ) > 0:
-            self.ax1.plot( gonadPos[0], gonadPos[1], 'o', color='red', ms=10, mew=0, alpha=.5, lw = 0 ) 
+            self.ax1.plot( gonadPos[0], gonadPos[1], 'o', color='green', ms=10, mew=0, alpha=.7, lw = 0 ) 
+
+        # print cell positions
+        cells = extract_current_cell_pos(self.cellPosDF, self.tp.value())
+        for idx, cell in cells.iterrows():
+            if cell.cname[0] != 'b': 
+                pos = np.array( [ gonadPos[0]*self.compression-256+cell.X, gonadPos[1]*self.compression-256+cell.Y ] ) / self.compression
+                self.ax1.plot( pos[0], pos[1], 'o', color = 'blue', ms = 5, mew = 0, alpha = .5 )
 
         # pritn apdv pos
         for idx, pos in self.currentPos.iterrows():

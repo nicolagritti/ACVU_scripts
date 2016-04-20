@@ -493,7 +493,7 @@ class GUI(QtGui.QWidget):
 		self.sld2.setMinimum(0)
 
 	def initializeCanvas1(self):
-		print('initializing canvas1')
+		# print('initializing canvas1')
 
 		self.fig1.clf()
 		self.fig1.subplots_adjust(left=0., right=1., top=1., bottom=0.)
@@ -521,7 +521,7 @@ class GUI(QtGui.QWidget):
 		self.setFocus()
 
 	def updateCanvas1(self):
-		print('updating canvas1')
+		# print('updating canvas1')
 
 		# clear cell text and points
 		# print(self.text1,self.points1)
@@ -591,7 +591,7 @@ class GUI(QtGui.QWidget):
 		self.setFocus()
 
 	def initializeCanvas2(self):
-		print('initializing canvas2')
+		# print('initializing canvas2')
 
 		self.fig2.clf()
 		self.fig2.subplots_adjust(left=0., right=1., top=1., bottom=0.)
@@ -616,7 +616,7 @@ class GUI(QtGui.QWidget):
 		self.setFocus()
 
 	def updateCanvas2(self):
-		print('updating canvas2')
+		# print('updating canvas2')
 
 		# plot the image
 		self.imgplot2.set_data( self.stacks[self.currentChannel][self.sl.value()] )
@@ -662,23 +662,6 @@ class GUI(QtGui.QWidget):
 
 	def computeFluo( self ):
 
-		path = self.path
-		worm = self.worm
-
-		rawImgsPath = os.path.join( path, worm + '_analyzedImages' )
-
-		imgpxl = 50
-
-		# load pickle files
-		paramsDF = self.paramsDF
-		timesDF = self.timesDF
-		gpDF = self.gpDF
-
-		currentCells = self.currentCells
-
-		# load darkField
-		darkField = load_stack( 'X:\\Orca_calibration\\AVG_darkField.tif' )
-
 		if self._488nmBtn.isChecked():
 			channel = '488nm'
 		elif self._561nmBtn.isChecked():
@@ -686,6 +669,21 @@ class GUI(QtGui.QWidget):
 		else:
 			QtGui.QMessageBox.about(self, 'Warning', 'Select a proper fluorescence channel!')
 			return
+
+		path = self.path
+		worm = self.worm
+
+		rawImgsPath = os.path.join( path, worm + '_analyzedImages' )
+		imgpxl = 50
+
+		# load pickle files
+		paramsDF = self.paramsDF
+		timesDF = self.timesDF
+		gpDF = self.gpDF
+		currentCells = self.currentCells
+
+		# load darkField
+		darkField = load_stack( 'X:\\Orca_calibration\\AVG_darkField.tif' )
 
 		# load flatField
 		flatField = load_stack( os.path.join( path, 'AVG_flatField_'+channel+'.tif' ) )
@@ -738,7 +736,7 @@ class GUI(QtGui.QWidget):
 				else:
 
 					### this is for backgrounds in which an outline has been drawn
-					signal = calculate_fluo_intensity( imgCorr, cellPos, cellOut )
+					signal = calculate_fluo_intensity( imgCorr, np.array([0,0]), cellOut )
 					drift = [ 0, 0 ]
 
 			else:
@@ -748,19 +746,17 @@ class GUI(QtGui.QWidget):
 
 					print('detected background without outline: ', cell.cname)
 
-					cellPos = extract_3Dpos( cell )
-
-					signal = calculate_fluo_intensity_bckg( imgCorr, 6, cellPos )
+					signal = calculate_fluo_intensity_bckg( imgsCorr[cellPos[2],:,:], 6, cellPos )
 
 					drift = [ 0, 0 ]
 
 			### update the currentCells dataframe
-			newCurrentCells = update_current_cell_fluo( self.currentCells, cell, channel, drift, signal )
+			newCurrentCells = update_current_cell_fluo( currentCells, cell, channel, drift, signal )
 			self.currentCells = newCurrentCells
 
 			# update the cell outline data frame before updating the images and retrireving new cells
 			newCellFluoDF = update_cell_fluo_DF( self.currentCells, self.cellFluoDF, self.tp.value() )
-			self.cellFluoDF = newCellFluoDF.copy()
+			self.cellFluoDF = newCellFluoDF
 
 		self.updateCanvas1()
 
@@ -779,7 +775,6 @@ class GUI(QtGui.QWidget):
 			for jdx, cell in self.currentCells.iterrows():
 				self.analyzedCell = cell.cname
 				self.computeFluo()
-				# time.sleep(3)
 
 		self.tp.setValue( firsttp )
 

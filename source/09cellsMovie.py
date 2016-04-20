@@ -42,8 +42,9 @@ def inverse(pos1,pos2,posn):
 	return np.sign(sign) == 1
 
 def extractCoords(cell):
+	# print(cell)
 	# return np.array([cell.X,cell.Y])
-	return np.array([cell.fluo488nmXnewPos,cell.fluo488nmYnewPos])
+	return np.array([cell.X488nm,cell.Y488nm])
 
 def extractCoordsRot(cell):
 	return np.array([cell.cXposRot,cell.cYposRot])
@@ -96,36 +97,13 @@ def flipImage(imgs,refPoints):
 	else:
 		return imgs, False
 
-def extractInterestedCellNames(cdatatp):
-	if 'e.' in cdatatp.cname.values:
-		c1 = 'e.'
-		if 'f.' in cdatatp.cname.values:
-			c2 = 'f.'
-		if 'b.' in cdatatp.cname.values:
-			c2 = 'b.'
-	if 'a.' in cdatatp.cname.values:
-		c1 = 'a.'
-		if 'f.' in cdatatp.cname.values:
-			c2 = 'f.'
-		if 'b.' in cdatatp.cname.values:
-			c2 = 'b.'
-		if '3.' in cdatatp.cname.values:
-			c2 = '3.'
-	if '2.' in cdatatp.cname.values:
-		c1 = '2.'
-		if '3.' in cdatatp.cname.values:
-			c2 = '3.'
-		if 'b.' in cdatatp.cname.values:
-			c2 = 'b.'
-	return (c1,c2)
-
-
-
 # path = 'X:\\Simone\\16_01_25_MCHERRY_LAG2YFP\\'
-path = 'X:\\Simone\\160129_MCHERRY_HLH2GFP_onHB101'
+path = 'X:\\Simone\\160407_HLH2_GFP_hist_mCherry'
 
-worms = ['C17']
-channel = '561nm'
+worms = ['C11']
+channel = '488nm'
+
+size=40
 
 ### INCLUDE DRIFT CORRECTION
 
@@ -144,6 +122,7 @@ for w in worms:
 	timesDF = load_data_frame( path, w + '_01times.pickle' )
 	gpDF = load_data_frame( path, w + '_02gonadPos.pickle' )
 	cellPosDF = load_data_frame( path, w + '_04cellPos.pickle' )
+	cellOutDF = load_data_frame( path, w + '_05cellOut.pickle' )
 	cellFluoDF = load_data_frame( path, w + '_06cellFluo.pickle' )
 	apdvPosDF = load_data_frame( path, w + '_08apdvPos.pickle' )
 	
@@ -161,7 +140,7 @@ for w in worms:
 		# if trow.tidxRel == 42:
 		# 	continue
 
-		currentCells = extract_current_cell_fluo( cellFluoDF, trow.tidxRel )
+		currentCells = extract_current_cell_fluo( cellPosDF, cellOutDF, cellFluoDF, trow.tidxRel )
 		currentCellsOriginalPos = extract_current_cell_pos( cellPosDF, trow.tidxRel )
 
 		### if there are only 2 cells (one is the bckg) then skip the timepoint
@@ -276,7 +255,6 @@ for w in worms:
 			### crop images
 			for jdx, cell in interestingCells.iterrows():
 
-				size=25
 				pos = extractCoordsRot(cell)
 				small = imgsFinal[ currentCellsOriginalPos.ix[currentCellsOriginalPos.cname == cell.cname,'Z'], pos[1]-size:pos[1]+size, pos[0]-size:pos[0]+size ]
 
