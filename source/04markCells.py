@@ -376,6 +376,15 @@ class GUI(QtGui.QWidget):
         elif event.key() == QtCore.Qt.Key_Down:
             self.changeSpaceTime( 'space', -1 )
 
+        elif event.key() == QtCore.Qt.Key_Space:
+            idx = self.channels.index(self.currentChannel)
+            if self.channels[ (idx+1)%len(self.channels) ] == 'CoolLED':
+                self.CoolLEDBtn.setChecked(True)
+            if self.channels[ (idx+1)%len(self.channels) ] == '488nm':
+                self._488nmBtn.setChecked(True)
+            if self.channels[ (idx+1)%len(self.channels) ] == '561nm':
+                self._561nmBtn.setChecked(True)
+
         # key press on cropped image
         if self.canvas1.underMouse():
             self.onKeyPressOnCanvas1(event)

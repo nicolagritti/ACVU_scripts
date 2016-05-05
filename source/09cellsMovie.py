@@ -44,6 +44,10 @@ def inverse(pos1,pos2,posn):
 def extractCoords(cell):
 	# print(cell)
 	# return np.array([cell.X,cell.Y])
+	if np.isnan( cell.X488nm ):
+		cell.X488nm = cell.X
+	if np.isnan( cell.Y488nm ):
+		cell.Y488nm = cell.Y
 	return np.array([cell.X488nm,cell.Y488nm])
 
 def extractCoordsRot(cell):
@@ -98,10 +102,10 @@ def flipImage(imgs,refPoints):
 		return imgs, False
 
 # path = 'X:\\Simone\\16_01_25_MCHERRY_LAG2YFP\\'
-path = 'X:\\Simone\\160407_HLH2_GFP_hist_mCherry'
+path = 'X:\\Simone\\160420_LIN12_GFP_hist_mCherry'
 
-worms = ['C11']
-channel = '488nm'
+worms = ['C01']
+channel = '561nm'
 
 size=40
 

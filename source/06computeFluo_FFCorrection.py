@@ -32,7 +32,7 @@ class GUI(QtGui.QWidget):
 
 		super(GUI, self).__init__()
 
-		self.setWindowTitle( 'Outline Cells' )
+		self.setWindowTitle( 'Compute Cell Fluorescence' )
 		self.cellNames = ['1.p','4.a','1.pp','4.aa','1.ppa','1.ppp','4.aaa','4.aap','b_1','b_4']
 		self.initUI()
     

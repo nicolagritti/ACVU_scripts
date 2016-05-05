@@ -91,7 +91,7 @@ def plotFluorescence( path, worm, ax1, ax2, color = 'k', channel = '488nm' ):
 			# c2signal = cell2.fluo488nm
 
 			# print(cell1.cname,cell1.fluo488nm,cell2.cname,cell2.fluo488nm)
-			data.ix[ data.tidx == trow.tidxRel, 'ratio' ] = ( c1signal - c2signal ) / ( c1signal + c2signal )
+			data.ix[ data.tidx == trow.tidxRel, 'ratio' ] = ( c1signal - c2signal )# / ( c1signal + c2signal )
 			data.ix[ data.tidx == trow.tidxRel, 'lineage' ] = int(np.min([len(cell1.cname),len(cell2.cname)])-3)
 			# print(cell1.cname,cell2.cname,int(np.min([len(cell1.cname),len(cell2.cname)])-3),colorsRatio[int(np.min([len(cell1.cname),len(cell2.cname)])-3)])
 
@@ -133,13 +133,13 @@ if __name__ == '__main__':
 		tl.set_fontsize(18)
 	for tl in ax2.get_yticklabels():
 		tl.set_fontsize(18)
-	ax2.set_ylim(-1,1)
+	ax2.set_ylim(-5,5)
 	
 	# ax2.set_xlim((9,30))
 	ax2.set_xlim(-5,10)
 
 	ax1.plot([0,0],[0,2000],'--', color = 'black', lw=1)
-	ax2.plot([0,0],[-1,1],'--', color = 'black', lw=1)
+	ax2.plot([0,0],[-6,6],'--', color = 'black', lw=1)
 
 	path = 'X:\\Simone\\160407_HLH2_GFP_hist_mCherry'
 

@@ -31,7 +31,7 @@ class GUI(QtGui.QWidget):
 
         super(GUI, self).__init__()
         
-        self.setWindowTitle( 'Body Length Analysis' )
+        self.setWindowTitle( 'Mark Gonad' )
         self.initUI()
         
     #-----------------------------------------------------------------------------------------------

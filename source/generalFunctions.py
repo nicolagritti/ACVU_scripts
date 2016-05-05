@@ -583,7 +583,7 @@ def calculate_fluo_intensity( img, center, outline ):
 
 def calculate_fluo_intensity_bckg( img, imgpxl, center ):
 
-    img = img[ center[1]-imgpxl/2:center[1]+imgpxl/2, center[0]-imgpxl/2:center[0]+imgpxl/2 ]
+    img = img[ center[1]-imgpxl:center[1]+imgpxl, center[0]-imgpxl:center[0]+imgpxl ]
     size = len( img.flatten() )
 
     return np.sum( img ) / size
