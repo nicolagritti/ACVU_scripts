@@ -32,3 +32,5 @@ print(thr)
 idx = 17
 plt.imshow(mcherry[idx]>thr[idx])
 plt.show()
+
+  

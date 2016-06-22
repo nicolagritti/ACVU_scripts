@@ -34,6 +34,7 @@ class GUI(QtGui.QWidget):
 
 		self.setWindowTitle( 'Compute Cell Fluorescence' )
 		self.cellNames = ['1.p','4.a','1.pp','4.aa','1.ppa','1.ppp','4.aaa','4.aap','b_1','b_4']
+		self.imgpxl = 80
 		self.initUI()
     
     #-----------------------------------------------------------------------------------------------
@@ -211,7 +212,8 @@ class GUI(QtGui.QWidget):
 		self.setWindowTitle('Outline Cells - ' + self.pathDial)
 
 		### give error message if there is no CoolLED movie in the selected folder
-		if not os.path.isfile( os.path.join( self.pathDial, 'CoolLED_movie.tif' ) ):
+		flist = glob.glob( self.pathDial + '\\*_movie.tif' )
+		if len(flist)==0:#not os.path.isfile( os.path.join( self.pathDial, '*_movie.tif' ) ):
 			QtGui.QMessageBox.about(self,'Warning!','There is no movie in this folder! Create a movie first!')
 			return
 
@@ -241,13 +243,13 @@ class GUI(QtGui.QWidget):
 			if os.path.isfile( os.path.join( self.pathDial, c + '_movie.tif' ) ):
 
 				self.channels.append(c)
-		self.currentChannel = 'CoolLED'
+		self.currentChannel = self.channels[0]
 
 		### detect size of the cropped images
 		tp = first_tidx_pos_all_cells( self.cellPosDF )
 		self.prevtp = tp-1
 		tRow = self.timesDF.ix[ self.timesDF.tidxRel == tp ].squeeze()
-		fileName = os.path.join( self.pathDial, tRow.fName + 'CoolLED.tif')
+		fileName = os.path.join( self.pathDial, tRow.fName + self.currentChannel + '.tif')
 		firststack = load_stack( fileName )
 		self.cropsize = firststack.shape[1]
 		self.nslices = firststack.shape[0]
@@ -275,7 +277,12 @@ class GUI(QtGui.QWidget):
 		else:
 			self.loadNewStack()
 
-		self.CoolLEDBtn.setChecked(True)    # this uppdates the canvases once more
+		if self.currentChannel == 'CoolLED':
+			self.CoolLEDBtn.setChecked(True)    # this uppdates the canvas1 once more
+		elif self.currentChannel == '561nm':
+			self._561nmBtn.setChecked(True)    # this uppdates the canvas1 once more
+		elif self.currentChannel == '488nm':
+			self._488nmBtn.setChecked(True)    # this uppdates the canvas1 once more
 
 		# self.pathDial.show()
 		self.setFocus()
@@ -316,7 +323,9 @@ class GUI(QtGui.QWidget):
 				self.stacks[ch] = prevmax*np.ones((self.nslices,self.cropsize,self.cropsize))
 
 		### extract current cells already labeled
+		print('Cells in previous tp:', self.currentCells)
 		self.currentCells = extract_current_cell_fluo( self.cellPosDF, self.cellOutDF, self.cellFluoDF, self.tp.value() )
+		print('Cells in new tp:', self.currentCells)
 
 		# if there are cells labeled and if the previously currently analyzed cell is present, set it as the currently labeled cell and select the right slice
 		if len(self.currentCells) > 0:
@@ -350,39 +359,49 @@ class GUI(QtGui.QWidget):
 		self.updateCanvas2()
         
 	def radio488Clicked(self, enabled):
-		print('radio 488 clicked')
+		# print('radio 488 clicked')
 
 		if enabled:
 			if '488nm' in self.channels:
 				self.currentChannel = '488nm'
-				self.computeAllBtn.setText('Compute %s signal for all the images' %'488nm')
 				self.setFocus()
-				self.updateAllCanvas()
+				self.updateCanvas1()
 			else:
-				self.CoolLEDBtn.setChecked(True)
+				if self.currentChannel == 'CoolLED':
+					self.CoolLEDBtn.setChecked(True)    # this uppdates the canvas1 once more
+				elif self.currentChannel == '561nm':
+					self._561nmBtn.setChecked(True)    # this uppdates the canvas1 once more
 				QtGui.QMessageBox.about(self, 'Warning', 'No 488nm channel!')
 
 	def radio561Clicked(self, enabled):
-		print('radio 561 clicked')
+	    # print('radio 561 clicked')
 
 		if enabled:
 			if '561nm' in self.channels:
 				self.currentChannel = '561nm'
-				self.computeAllBtn.setText('Compute %s signal for all the images' %'561nm')
 				self.setFocus()
-				self.updateAllCanvas()
+				self.updateCanvas1()
 			else:
-				self.CoolLEDBtn.setChecked(True)
+				if self.currentChannel == 'CoolLED':
+					self.CoolLEDBtn.setChecked(True)    # this uppdates the canvas1 once more
+				elif self.currentChannel == '488nm':
+					self._488nmBtn.setChecked(True)    # this uppdates the canvas1 once more
 				QtGui.QMessageBox.about(self, 'Warning', 'No 561nm channel!')
 
 	def radioCoolLEDClicked(self, enabled):
-		print('radio LED clicked')
+	    # print('radio LED clicked')
 
 		if enabled:
-			self.currentChannel = 'CoolLED'
-			self.computeAllBtn.setText('Computing CoolLED signal not available!')
-			self.setFocus()
-			self.updateAllCanvas()
+			if 'CoolLED' in self.channels:
+				self.currentChannel = 'CoolLED'
+				self.setFocus()
+				self.updateCanvas1()
+			else:
+				if self.currentChannel == '561nm':
+					self._561nmBtn.setChecked(True)    # this uppdates the canvas1 once more
+				elif self.currentChannel == '488nm':
+					self._488nmBtn.setChecked(True)    # this uppdates the canvas1 once more
+				QtGui.QMessageBox.about(self, 'Warning', 'No CoolLED channel!')
 
 	def updateBC(self):
 		# change brightness and contrast
@@ -444,14 +463,15 @@ class GUI(QtGui.QWidget):
 			QtGui.QMessageBox.about(self, 'Warning', 'Select a proper fluorescence channel!')
 			return		
 
-		imgpxl = 50
+		currentCell = self.currentCells.ix[ self.currentCells.cname == self.analyzedCell ].squeeze()
+		imgpxl = currentCell.imgPxl
 		cell = self.currentCells.ix[ self.currentCells.cname == self.analyzedCell ].squeeze()
 		cellPos = extract_3Dpos( cell )
-		cellOut = extract_out( cell )
+		cellOut = extract_out( cell ) * imgpxl / 1000.
 
 		# calculate new drift
 		pos = np.array( [ int(np.round(event.xdata)), int(np.round(event.ydata)) ] )
-		drift = np.array([pos[0]-imgpxl/2,pos[1]-imgpxl/2])
+		drift = np.array([pos[0]-500,pos[1]-500]) * self.imgpxl / 1000.
 
 		### perform flat field correction
 		# find gonadpos
@@ -467,7 +487,7 @@ class GUI(QtGui.QWidget):
 		imgCorr = imgsCorr[cellPos[2],cellPos[1]-imgpxl/2:cellPos[1]+imgpxl/2+1,cellPos[0]-imgpxl/2:cellPos[0]+imgpxl/2+1]
 
 		### find the new signal
-		signal = calculate_fluo_intensity( imgCorr, np.array([pos[0]-imgpxl/2,pos[1]-imgpxl/2]), cellOut )
+		signal = calculate_fluo_intensity( imgCorr, drift, cellOut )
 
 		# update the current cells
 		newCurrentCells = update_current_cell_fluo( self.currentCells, cell, channel, drift, signal )
@@ -502,7 +522,7 @@ class GUI(QtGui.QWidget):
 
 		# plot the first blank image with the right size
 		self.ax1.cla()
-		self.imgplot1 = self.ax1.imshow( np.zeros((50,50)), cmap = 'gray', interpolation = 'nearest' )
+		self.imgplot1 = self.ax1.imshow( np.zeros((1000,1000)), cmap = 'gray', interpolation = 'nearest' )
 
 		# remove the white borders
 		self.ax1.autoscale(False)
@@ -543,18 +563,21 @@ class GUI(QtGui.QWidget):
 
 		# if no cells labeled, leave the image blank
 		if len( self.currentCells ) == 0:
-			self.imgplot1.set_data( np.ones((50,50)) )
+			self.imgplot1.set_data( np.ones((10,10)) )
 			self.canvas1.draw()
 			return
 
 		# current cell
 		currentCell = self.currentCells.ix[ self.currentCells.cname == self.analyzedCell ].squeeze()
 
+		# extract the zoom
+		self.imgpxl = currentCell.imgPxl
+		imgpxl = self.imgpxl
+
 		# extract current cell data
 		pos = extract_3Dpos( currentCell )
 
 		# plot the image
-		imgpxl = 50
 		self.imgplot1.set_data( self.stacks[self.currentChannel][self.sl.value(),pos[1]-imgpxl/2:pos[1]+imgpxl/2+1,pos[0]-imgpxl/2:pos[0]+imgpxl/2+1] )
 
 		# change brightness and contrast
@@ -562,7 +585,7 @@ class GUI(QtGui.QWidget):
 
 		# print cell name
 		if pos[2] == self.sl.value():
-			self.text_c1.append( self.ax1.text( 1, 2, self.analyzedCell, color='yellow', size='medium', alpha=.8,
+			self.text_c1.append( self.ax1.text( 10, 50, self.analyzedCell, color='yellow', size='medium', alpha=.8,
 					rotation=0, fontsize = 20 ) )
 
 		### draw outline
@@ -574,17 +597,17 @@ class GUI(QtGui.QWidget):
 			outline = np.vstack( [ outline, outline[0] ] )
 
 		self.out_c1.append( self.ax1.plot( outline[:,0], outline[:,1], '-x', color='yellow', ms=2, alpha=1., lw = .5 )[0] )
-		self.center_c1.append( self.ax1.plot( 25, 25, 'o', color = 'yellow', mew = 0. )[0] )
+		self.center_c1.append( self.ax1.plot( 500, 500, 'o', color = 'yellow', mew = 0. )[0] )
 
 		# draw drifted outline
 		if self._488nmBtn.isChecked():
-			drift = extract_pos488(currentCell) - extract_pos(currentCell)
+			drift = ( extract_pos488(currentCell) - extract_pos(currentCell) ) * 1000 / imgpxl
 		elif self._561nmBtn.isChecked():
-			drift = extract_pos561(currentCell) - extract_pos(currentCell)
+			drift = ( extract_pos561(currentCell) - extract_pos(currentCell) ) * 1000 / imgpxl
 		else:
 			drift = np.array([np.nan,np.nan])
 		self.outDrift_c1.append( self.ax1.plot( drift[0] + outline[:,0], drift[1] + outline[:,1], '-x', color='red', ms=2, alpha=1., lw = .5 )[0] )
-		self.centerDrift_c1.append( self.ax1.plot( 25 + drift[0], 25 + drift[1], 'o', color = 'red', mew = 0. )[0] )
+		self.centerDrift_c1.append( self.ax1.plot( 500 + drift[0], 500 + drift[1], 'o', color = 'red', mew = 0. )[0] )
 
 		# # redraw the canvas
 		self.canvas1.draw()
@@ -674,7 +697,6 @@ class GUI(QtGui.QWidget):
 		worm = self.worm
 
 		rawImgsPath = os.path.join( path, worm + '_analyzedImages' )
-		imgpxl = 50
 
 		# load pickle files
 		paramsDF = self.paramsDF
@@ -709,6 +731,10 @@ class GUI(QtGui.QWidget):
 			cell = self.currentCells.ix[ self.currentCells.cname == self.analyzedCell ].squeeze()
 			cellPos = extract_3Dpos( cell )
 
+			# extract the zoom
+			self.imgpxl = cell.imgPxl
+			imgpxl = self.imgpxl
+
 			### find the XYpos with maximum intensity
 			imgCorr = imgsCorr[cellPos[2],cellPos[1]-imgpxl/2:cellPos[1]+imgpxl/2+1,cellPos[0]-imgpxl/2:cellPos[0]+imgpxl/2+1]
 
@@ -717,7 +743,7 @@ class GUI(QtGui.QWidget):
 
 				print('detected cell/background with outline: ', cell.cname)
 
-				cellOut = extract_out( cell )
+				cellOut = extract_out( cell ) * self.imgpxl / 1000.
 
 				if not cell.cname[:2] == 'b_':
 
@@ -742,13 +768,13 @@ class GUI(QtGui.QWidget):
 			else:
 
 				### if the outline of the background has not been drawn, just take a small area arund its center
-				if cell.cname[:2] == 'b_':
+				# if cell.cname[:2] == 'b_':
 
-					print('detected background without outline: ', cell.cname)
+				print('detected background/cell without outline: ', cell.cname)
 
-					signal = calculate_fluo_intensity_bckg( imgsCorr[cellPos[2],:,:], 6, cellPos )
+				signal = calculate_fluo_intensity_bckg( imgsCorr[cellPos[2],:,:], 6, cellPos )
 
-					drift = [ 0, 0 ]
+				drift = [ 0, 0 ]
 
 			### update the currentCells dataframe
 			newCurrentCells = update_current_cell_fluo( currentCells, cell, channel, drift, signal )

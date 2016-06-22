@@ -182,7 +182,8 @@ class GUI(QtGui.QWidget):
         self.setWindowTitle('Mark Cells - ' + self.pathDial)
         
         ### give error message if there is no CoolLED movie in the selected folder
-        if not os.path.isfile( os.path.join( self.pathDial, 'CoolLED_movie.tif' ) ):
+        flist = glob.glob( self.pathDial + '\\*_movie.tif' )
+        if len(flist)==0:#not os.path.isfile( os.path.join( self.pathDial, '*_movie.tif' ) ):
             QtGui.QMessageBox.about(self,'Warning!','There is no movie in this folder! Create a movie first!')
             return
 
@@ -194,6 +195,19 @@ class GUI(QtGui.QWidget):
         # extract some info
         self.compression = self.paramsDF.compression
         self.hatchingtidx = int( self.paramsDF.tidxHatch )
+
+        ### find ecdysis timepoint
+
+        ecd = np.loadtxt( open( os.path.join( self.path, 'skin.txt'), 'rb' ) )
+        # load ecdysis data
+        index = np.where( ecd[:,0] == float(self.worm[1:]) )
+        mintp = np.min( [ i for i in ecd[index, 1:6][0][0] if i >= 0 ] )
+        lethtidx = ecd[ index, 2:6 ][0][0] - 1
+        tpL2 = self.timesDF.ix[ self.timesDF.tidxRel == lethtidx[0], 'timesRel' ].values[0]
+        tpL1 = self.timesDF.ix[ self.timesDF.tidxRel == mintp, 'timesRel' ].values[0]
+
+        # relative to hatching time
+        self.tpHatch=tpL1
 
         ### if the cellPos pickle file already exists, load it, otherwise create a blank one
         if os.path.isfile( os.path.join(self.path, self.worm + '_04cellPos.pickle' ) ):
@@ -210,19 +224,22 @@ class GUI(QtGui.QWidget):
             if os.path.isfile( os.path.join( self.pathDial, c + '_movie.tif' ) ):
 
                 self.channels.append(c)
-        self.currentChannel = 'CoolLED'
+        self.currentChannel = self.channels[0]
 
         ### detect size of the cropped images
         tp = np.min( self.gpDF.ix[ pd.notnull( self.gpDF.X ), 'tidx' ] )
         self.prevtp = tp-1
         tRow = self.timesDF.ix[ self.timesDF.tidxRel == tp ].squeeze()
-        fileName = os.path.join( self.pathDial, tRow.fName + 'CoolLED.tif')
+        fileName = os.path.join( self.pathDial, tRow.fName + self.currentChannel + '.tif')
         firststack = load_stack( fileName )
         self.cropsize = firststack.shape[1]
         self.nslices = firststack.shape[0]
 
         ### load CoolLED movie
-        self.LEDmovie = load_stack( os.path.join( self.pathDial, 'CoolLED_movie.tif' ) )
+        if 'CoolLED' in self.channels:
+            self.LEDmovie = load_stack( os.path.join( self.pathDial, 'CoolLED_movie.tif' ) )
+        else:
+            self.LEDmovie = load_stack( os.path.join( self.pathDial, self.currentChannel + '_movie.tif' ) )
         self.initializeCanvas1()
         self.initializeCanvas2()
 
@@ -241,7 +258,12 @@ class GUI(QtGui.QWidget):
 
         self.tp.setValue( tp )
 
-        self.CoolLEDBtn.setChecked(True)    # this uppdates the canvas1 once more
+        if self.currentChannel == 'CoolLED':
+            self.CoolLEDBtn.setChecked(True)    # this uppdates the canvas1 once more
+        elif self.currentChannel == '561nm':
+            self._561nmBtn.setChecked(True)    # this uppdates the canvas1 once more
+        elif self.currentChannel == '488nm':
+            self._488nmBtn.setChecked(True)    # this uppdates the canvas1 once more
 
         # self.pathDial.show()
         self.setFocus()
@@ -326,7 +348,10 @@ class GUI(QtGui.QWidget):
                 self.setFocus()
                 self.updateCanvas1()
             else:
-                self.CoolLEDBtn.setChecked(True)
+                if self.currentChannel == 'CoolLED':
+                    self.CoolLEDBtn.setChecked(True)    # this uppdates the canvas1 once more
+                elif self.currentChannel == '561nm':
+                    self._561nmBtn.setChecked(True)    # this uppdates the canvas1 once more
                 QtGui.QMessageBox.about(self, 'Warning', 'No 488nm channel!')
 
     def radio561Clicked(self, enabled):
@@ -338,16 +363,26 @@ class GUI(QtGui.QWidget):
                 self.setFocus()
                 self.updateCanvas1()
             else:
-                self.CoolLEDBtn.setChecked(True)
+                if self.currentChannel == 'CoolLED':
+                    self.CoolLEDBtn.setChecked(True)    # this uppdates the canvas1 once more
+                elif self.currentChannel == '488nm':
+                    self._488nmBtn.setChecked(True)    # this uppdates the canvas1 once more
                 QtGui.QMessageBox.about(self, 'Warning', 'No 561nm channel!')
 
     def radioCoolLEDClicked(self, enabled):
         # print('radio LED clicked')
 
         if enabled:
-            self.currentChannel = 'CoolLED'
-            self.setFocus()
-            self.updateCanvas1()
+            if 'CoolLED' in self.channels:
+                self.currentChannel = 'CoolLED'
+                self.setFocus()
+                self.updateCanvas1()
+            else:
+                if self.currentChannel == '561nm':
+                    self._561nmBtn.setChecked(True)    # this uppdates the canvas1 once more
+                elif self.currentChannel == '488nm':
+                    self._488nmBtn.setChecked(True)    # this uppdates the canvas1 once more
+                QtGui.QMessageBox.about(self, 'Warning', 'No CoolLED channel!')
 
     def updateBC(self):
         # change brightness and contrast
@@ -576,7 +611,7 @@ class GUI(QtGui.QWidget):
 
         # print time
         # print(self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value(), 'timesRel' ])
-        self.text2.set_text( '%.2f' % self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value(), 'timesRel' ].values[0] )
+        self.text2.set_text( '%.2f' % ( self.timesDF.ix[ self.timesDF.tidxRel == self.tp.value(), 'timesRel' ].values[0] - self.tpHatch ) )
 
         # redraw the canvas
         self.canvas2.draw()

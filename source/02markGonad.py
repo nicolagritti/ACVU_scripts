@@ -177,7 +177,8 @@ class GUI(QtGui.QWidget):
         self.setWindowTitle('Body Length Analysis - ' + self.pathDial)
 
         ### give error message if there is no CoolLED movie in the selected folder
-        if not os.path.isfile( os.path.join( self.pathDial, 'CoolLED_movie.tif' ) ):
+        flist = glob.glob( self.pathDial + '\\*_movie.tif' )
+        if len(flist)==0:#not os.path.isfile( os.path.join( self.pathDial, '*_movie.tif' ) ):
             QtGui.QMessageBox.about(self,'Warning!','There is no movie in this folder! Create a movie first!')
             return
 
@@ -192,8 +193,11 @@ class GUI(QtGui.QWidget):
         
         if os.path.isfile( os.path.join( self.pathDial, 'CoolLED_movie.tif' ) ):
             self.channels['CoolLED'] = load_stack( os.path.join( self.pathDial, 'CoolLED_movie.tif' ) )
-
-        self.currentChannel = 'CoolLED'
+        print(list(self.channels.keys())[0])
+        if 'CoolLED' in self.channels.keys():
+            self.currentChannel = 'CoolLED'
+        else:
+            self.currentChannel = list(self.channels.keys())[0]
 
         ### load parameters and times dataframes
         self.paramsDF = load_data_frame( self.path, self.worm + '_01params.pickle' )
@@ -235,37 +239,48 @@ class GUI(QtGui.QWidget):
         save_data_frame( self.gpDF, self.path, self.worm + '_02gonadPos.pickle' )
         
     def radio488Clicked(self, enabled):
-        print('radio 488 clicked')
+        # print('radio 488 clicked')
 
         if enabled:
-            if '488nm' in self.channels.keys():
+            if '488nm' in self.channels:
                 self.currentChannel = '488nm'
+                self.setFocus()
                 self.updateCanvas1()
             else:
-                self.CoolLEDBtn.setChecked(True)
+                if self.currentChannel == 'CoolLED':
+                    self.CoolLEDBtn.setChecked(True)    # this uppdates the canvas1 once more
+                elif self.currentChannel == '561nm':
+                    self._561nmBtn.setChecked(True)    # this uppdates the canvas1 once more
                 QtGui.QMessageBox.about(self, 'Warning', 'No 488nm channel!')
 
     def radio561Clicked(self, enabled):
-        print('radio 561 clicked')
+        # print('radio 561 clicked')
 
         if enabled:
-            if '561nm' in self.channels.keys():
+            if '561nm' in self.channels:
                 self.currentChannel = '561nm'
                 self.setFocus()
                 self.updateCanvas1()
             else:
-                self.CoolLEDBtn.setChecked(True)
+                if self.currentChannel == 'CoolLED':
+                    self.CoolLEDBtn.setChecked(True)    # this uppdates the canvas1 once more
+                elif self.currentChannel == '488nm':
+                    self._488nmBtn.setChecked(True)    # this uppdates the canvas1 once more
                 QtGui.QMessageBox.about(self, 'Warning', 'No 561nm channel!')
 
     def radioCoolLEDClicked(self, enabled):
-        print('radio LED clicked')
+        # print('radio LED clicked')
 
         if enabled:
-            if 'CoolLED' in self.channels.keys():
+            if 'CoolLED' in self.channels:
                 self.currentChannel = 'CoolLED'
                 self.setFocus()
                 self.updateCanvas1()
             else:
+                if self.currentChannel == '561nm':
+                    self._561nmBtn.setChecked(True)    # this uppdates the canvas1 once more
+                elif self.currentChannel == '488nm':
+                    self._488nmBtn.setChecked(True)    # this uppdates the canvas1 once more
                 QtGui.QMessageBox.about(self, 'Warning', 'No CoolLED channel!')
 
     #-----------------------------------------------------------------------------------------------

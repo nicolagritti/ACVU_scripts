@@ -41,14 +41,21 @@ def inverse(pos1,pos2,posn):
 	sign = (pos2[0]-pos1[0])*(posn[1]-pos1[1])-(pos2[1]-pos1[0])*(posn[0]-pos1[0])
 	return np.sign(sign) == 1
 
-def extractCoords(cell):
+def extractCoords(cell,channel):
 	# print(cell)
 	# return np.array([cell.X,cell.Y])
-	if np.isnan( cell.X488nm ):
-		cell.X488nm = cell.X
-	if np.isnan( cell.Y488nm ):
-		cell.Y488nm = cell.Y
-	return np.array([cell.X488nm,cell.Y488nm])
+	if channel == '488nm':
+		if np.isnan( cell.X488nm ):
+			cell.X488nm = cell.X
+		if np.isnan( cell.Y488nm ):
+			cell.Y488nm = cell.Y
+		return np.array([cell.X488nm,cell.Y488nm])
+	if channel == '561nm':
+		if np.isnan( cell.X561nm ):
+			cell.X561nm = cell.X
+		if np.isnan( cell.Y561nm ):
+			cell.Y561nm = cell.Y
+		return np.array([cell.X561nm,cell.Y561nm])
 
 def extractCoordsRot(cell):
 	return np.array([cell.cXposRot,cell.cYposRot])
@@ -102,10 +109,11 @@ def flipImage(imgs,refPoints):
 		return imgs, False
 
 # path = 'X:\\Simone\\16_01_25_MCHERRY_LAG2YFP\\'
-path = 'X:\\Simone\\160420_LIN12_GFP_hist_mCherry'
+path = 'X:\\Simone\\160516_lag2_YFP_hist_mCherry'
+# path = 'X:\\Simone\\160523_lag2_GFP'#YFP_hist_mCherry'
 
-worms = ['C01']
-channel = '561nm'
+worms = ['C25']
+channels = ['561nm','488nm']
 
 size=40
 
@@ -130,149 +138,156 @@ for w in worms:
 	cellFluoDF = load_data_frame( path, w + '_06cellFluo.pickle' )
 	apdvPosDF = load_data_frame( path, w + '_08apdvPos.pickle' )
 	
-	### load darkField and flatField
+	### load darkField
 	darkField = load_stack( 'X:\\Orca_calibration\\AVG_darkField.tif' )
-	flatField = load_stack( os.path.join( path, 'AVG_flatField_'+channel+'.tif' ) )
 	
-	### create the movies
-	movie = [[],[]]
+	for channel in channels:
 
-	# for idx, trow in timesDF.ix[timesDF.tidxRel==42].iterrows(): # test single timepoints
-	for idx, trow in timesDF.iterrows():
+		### load flat field
+		flatField = load_stack( os.path.join( path, 'AVG_flatField_'+channel+'.tif' ) )
+	
+		### create the movies
+		movie = [[],[]]
 
-		### skip problematic timepoints
-		# if trow.tidxRel == 42:
-		# 	continue
+		# for idx, trow in timesDF.ix[timesDF.tidxRel==127].iterrows(): # test single timepoints
+		for idx, trow in timesDF.iterrows():
 
-		currentCells = extract_current_cell_fluo( cellPosDF, cellOutDF, cellFluoDF, trow.tidxRel )
-		currentCellsOriginalPos = extract_current_cell_pos( cellPosDF, trow.tidxRel )
+			### skip problematic timepoints
+			# if trow.tidxRel == 42:
+			# 	continue
 
-		### if there are only 2 cells (one is the bckg) then skip the timepoint
-		if len( currentCells.cname ) > 2:
+			currentCells = extract_current_cell_fluo( cellPosDF, cellOutDF, cellFluoDF, trow.tidxRel )
+			currentCellsOriginalPos = extract_current_cell_pos( cellPosDF, trow.tidxRel )
 
-			### find out which cells we want to show
-			(c1,c2,b1,b2) = find_interesting_cells( currentCells )
-			interestingCells = pd.concat([c1, c2],axis=1).transpose().reset_index()
-			refPoints = extract_current_apdv_pos( apdvPosDF, trow.tidxRel )
-			print(trow.tidxRel,list(interestingCells.cname))
+			### if there are only 2 cells (one is the bckg) then skip the timepoint
+			if len( currentCells.cname ) > 2:
 
-			### load stack
-			imgs = load_stack( os.path.join( outpath, trow.fName + channel + '.tif') )
-			# print(imgfile)
-			imgSize = imgs[0].shape[0]
+				### find out which cells we want to show
+				(c1,c2,b1,b2) = find_interesting_cells( currentCells )
+				interestingCells = pd.concat([c1, c2],axis=1).transpose().reset_index()
+				refPoints = extract_current_apdv_pos( apdvPosDF, trow.tidxRel )
+				print(trow.tidxRel,list(interestingCells.cname))
 
-			### correct for XY
-			gonadPos = extract_pos( gpDF.ix[ gpDF.tidx == trow.tidxRel ].squeeze() )
-			imgsXYCorr = flat_field_correction( imgs, darkField, flatField, gonadPos )
-			# print(imgsXYCorr[22])
+				### load stack
+				imgs = load_stack( os.path.join( outpath, trow.fName + channel + '.tif') )
+				# print(imgfile)
+				imgSize = imgs[0].shape[0]
 
-			# ### plot raw data
-			# plt.figure()
-			# plt.xlim(0,imgs[21].shape[0])
-			# plt.ylim(0,imgs[21].shape[1])
-			# plt.gca().invert_yaxis()
-			# plt.imshow(imgs[21],cmap='gray')
-			# colors = ['r','g']
-			# for kdx, cell in interestingCells.iterrows():
-			# 	pos = extractCoords(cell)
-			# 	plt.plot( pos[0], pos[1], 'o',color = colors[kdx])
-			# for kdx, cell in refPoints.iterrows():
-			# 	pos = extract_pos(cell) - gonadPos + 256
-			# 	plt.plot( pos[0], pos[1], 'o',color = 'b')
+				### correct for XY
+				gonadPos = extract_pos( gpDF.ix[ gpDF.tidx == trow.tidxRel ].squeeze() )
+				imgsXYCorr = flat_field_correction( imgs, darkField, flatField, gonadPos )
+				# print(imgsXYCorr[22])
 
-			### get coordinates with respect to center of the image (origin)
-			for jdx, cell in interestingCells.iterrows():
+				# ### plot raw data
+				# plt.figure()
+				# plt.xlim(0,imgs[21].shape[0])
+				# plt.ylim(0,imgs[21].shape[1])
+				# plt.gca().invert_yaxis()
+				# plt.imshow(imgs[21],cmap='gray')
+				# colors = ['r','g']
+				# for kdx, cell in interestingCells.iterrows():
+				# 	pos = extractCoords(cell)
+				# 	plt.plot( pos[0], pos[1], 'o',color = colors[kdx])
+				# for kdx, cell in refPoints.iterrows():
+				# 	pos = extract_pos(cell) - gonadPos + 256
+				# 	plt.plot( pos[0], pos[1], 'o',color = 'b')
 
-				posC = extractCoords(cell)
-				posO = coordTransformC2O(posC, imgSize)
-
-				interestingCells.ix[ interestingCells.cname == cell.cname, 'cXposO' ] = posO[0]
-				interestingCells.ix[ interestingCells.cname == cell.cname, 'cYposO' ] = posO[1]
-
-			for jdx, pos in refPoints.iterrows():
-				# print(pos)
-				posC = extract_pos(pos) - gonadPos + 256
-				posO = coordTransformC2O(posC, imgSize)
-
-				refPoints.ix[ refPoints.pname == pos.pname, 'cXposO' ] = posO[0]
-				refPoints.ix[ refPoints.pname == pos.pname, 'cYposO' ] = posO[1]
-
-			### rotate image
-
-			vect = extractRefPointsCoordsO(refPoints,'p') - extractRefPointsCoordsO(refPoints,'a')
-			alpha = -np.arctan2(vect[1],vect[0])
-			# print(alpha)
-			imgsRot = rotateImage(imgsXYCorr, alpha)
-
-			### rotate coordinates
-			for jdx, cell in interestingCells.iterrows():
-
-				posO = extractCoordsO(interestingCells, cell.cname)
-				posORot = rotateCoords(posO,alpha)
-
-				interestingCells.ix[interestingCells.cname==cell.cname,'cXposORot'] = posORot[0]
-				interestingCells.ix[interestingCells.cname==cell.cname,'cYposORot'] = posORot[1]
-
-				interestingCells.ix[interestingCells.cname==cell.cname,'cXposRot'] = coordTransformO2C( extractCoordsORot(interestingCells,cell.cname), imgSize )[0]
-				interestingCells.ix[interestingCells.cname==cell.cname,'cYposRot'] = coordTransformO2C( extractCoordsORot(interestingCells,cell.cname), imgSize )[1]
-
-			for jdx, pos in refPoints.iterrows():
-
-				posO = extractRefPointsCoordsO(refPoints,pos.pname)
-				posORot = rotateCoords(posO,alpha)
-
-				refPoints.ix[refPoints.pname==pos.pname,'cXposORot'] = posORot[0]
-				refPoints.ix[refPoints.pname==pos.pname,'cYposORot'] = posORot[1]
-
-				refPoints.ix[refPoints.pname==pos.pname,'cXposRot'] = coordTransformO2C( extractRefPointsCoordsORot(refPoints,pos.pname), imgSize )[0]
-				refPoints.ix[refPoints.pname==pos.pname,'cYposRot'] = coordTransformO2C( extractRefPointsCoordsORot(refPoints,pos.pname), imgSize )[1]
-
-			### flip image
-			imgsFinal, flipTF = flipImage( imgsRot, refPoints )
-
-			### flip coordinates
-			if flipTF:
-				# print('flipping...')
+				### get coordinates with respect to center of the image (origin)
 				for jdx, cell in interestingCells.iterrows():
-					posORot = extractCoordsORot(interestingCells, cell.cname)
+
+					posC = extractCoords(cell,channel)
+					posO = coordTransformC2O(posC, imgSize)
+
+					interestingCells.ix[ interestingCells.cname == cell.cname, 'cXposO' ] = posO[0]
+					interestingCells.ix[ interestingCells.cname == cell.cname, 'cYposO' ] = posO[1]
+
+				for jdx, pos in refPoints.iterrows():
+					# print(pos)
+					posC = extract_pos(pos) - gonadPos + 256
+					posO = coordTransformC2O(posC, imgSize)
+
+					refPoints.ix[ refPoints.pname == pos.pname, 'cXposO' ] = posO[0]
+					refPoints.ix[ refPoints.pname == pos.pname, 'cYposO' ] = posO[1]
+
+				### rotate image
+
+				vect = extractRefPointsCoordsO(refPoints,'p') - extractRefPointsCoordsO(refPoints,'a')
+				alpha = -np.arctan2(vect[1],vect[0])
+				# print(alpha)
+				imgsRot = rotateImage(imgsXYCorr, alpha)
+
+				### rotate coordinates
+				for jdx, cell in interestingCells.iterrows():
+
+					posO = extractCoordsO(interestingCells, cell.cname)
+					posORot = rotateCoords(posO,alpha)
 
 					interestingCells.ix[interestingCells.cname==cell.cname,'cXposORot'] = posORot[0]
-					interestingCells.ix[interestingCells.cname==cell.cname,'cYposORot'] = -posORot[1]
+					interestingCells.ix[interestingCells.cname==cell.cname,'cYposORot'] = posORot[1]
 
 					interestingCells.ix[interestingCells.cname==cell.cname,'cXposRot'] = coordTransformO2C( extractCoordsORot(interestingCells,cell.cname), imgSize )[0]
 					interestingCells.ix[interestingCells.cname==cell.cname,'cYposRot'] = coordTransformO2C( extractCoordsORot(interestingCells,cell.cname), imgSize )[1]
 
-			# ### plot rotated and flipped image
-			# plt.figure()
-			# plt.xlim(0,imgsFinal[21].shape[0])
-			# plt.ylim(0,imgsFinal[21].shape[1])
-			# plt.gca().invert_yaxis()
-			# plt.imshow(imgsFinal[21],cmap='gray')
-			# colors = ['r','g']
-			# for kdx, cell in interestingCells.iterrows():
-			# 	pos = extractCoordsRot(cell)
-			# 	plt.plot( pos[0], pos[1], 'o',color = colors[kdx])
-			# for kdx, cell in refPoints.iterrows():
-			# 	pos = extractCoordsRot(cell)
-			# 	plt.plot( pos[0], pos[1], 'o',color = 'b')
+				for jdx, pos in refPoints.iterrows():
 
-			### crop images
-			for jdx, cell in interestingCells.iterrows():
+					posO = extractRefPointsCoordsO(refPoints,pos.pname)
+					posORot = rotateCoords(posO,alpha)
 
-				pos = extractCoordsRot(cell)
-				small = imgsFinal[ currentCellsOriginalPos.ix[currentCellsOriginalPos.cname == cell.cname,'Z'], pos[1]-size:pos[1]+size, pos[0]-size:pos[0]+size ]
+					refPoints.ix[refPoints.pname==pos.pname,'cXposORot'] = posORot[0]
+					refPoints.ix[refPoints.pname==pos.pname,'cYposORot'] = posORot[1]
 
-				# print(cell, small.shape)
+					refPoints.ix[refPoints.pname==pos.pname,'cXposRot'] = coordTransformO2C( extractRefPointsCoordsORot(refPoints,pos.pname), imgSize )[0]
+					refPoints.ix[refPoints.pname==pos.pname,'cYposRot'] = coordTransformO2C( extractRefPointsCoordsORot(refPoints,pos.pname), imgSize )[1]
+
+				### flip image
+				imgsFinal, flipTF = flipImage( imgsRot, refPoints )
+
+				### flip coordinates
+				if flipTF:
+					# print('flipping...')
+					for jdx, cell in interestingCells.iterrows():
+						posORot = extractCoordsORot(interestingCells, cell.cname)
+
+						interestingCells.ix[interestingCells.cname==cell.cname,'cXposORot'] = posORot[0]
+						interestingCells.ix[interestingCells.cname==cell.cname,'cYposORot'] = -posORot[1]
+
+						interestingCells.ix[interestingCells.cname==cell.cname,'cXposRot'] = coordTransformO2C( extractCoordsORot(interestingCells,cell.cname), imgSize )[0]
+						interestingCells.ix[interestingCells.cname==cell.cname,'cYposRot'] = coordTransformO2C( extractCoordsORot(interestingCells,cell.cname), imgSize )[1]
+
+				# ### plot rotated and flipped image
 				# plt.figure()
-				# plt.imshow(small,cmap='gray')
+				# plt.xlim(0,imgsFinal[21].shape[0])
+				# plt.ylim(0,imgsFinal[21].shape[1])
+				# plt.gca().invert_yaxis()
+				# plt.imshow(imgsFinal[21],cmap='gray')
+				# colors = ['r','g']
+				# for kdx, cell in interestingCells.iterrows():
+				# 	pos = extractCoordsRot(cell)
+				# 	plt.plot( pos[0], pos[1], 'o',color = colors[kdx])
+				# for kdx, cell in refPoints.iterrows():
+				# 	pos = extractCoordsRot(cell)
+				# 	plt.plot( pos[0], pos[1], 'o',color = 'b')
 
-				movie[jdx].append(small)
-				# print(np.array(movie[jdx]).shape)
+				### crop images
+				for jdx, cell in interestingCells.iterrows():
 
-	# print(np.array(movie[0]).shape)
-	## save movies
-	imsave( os.path.join( outpath, 'cell_'+channel+'_1.tif' ), np.array(movie[0]) )
-	imsave( os.path.join( outpath, 'cell_'+channel+'_4.tif' ), np.array(movie[1]) )
+					pos = extractCoordsRot(cell)
+					small = imgsFinal[ currentCellsOriginalPos.ix[currentCellsOriginalPos.cname == cell.cname,'Z'], pos[1]-size:pos[1]+size, pos[0]-size:pos[0]+size ]
+					# print(cell)
+					# print(small.shape)
+
+					# print(cell, small.shape)
+					# plt.figure()
+					# plt.imshow(small,cmap='gray')
+
+					movie[jdx].append(small)
+					# print(np.array(movie[jdx]).shape)
+
+		# print(np.array(movie[0]).shape)
+		# print(np.array(movie[1]).shape)
+		## save movies
+		imsave( os.path.join( outpath, 'cell_'+channel+'_1.tif' ), np.array(movie[0]) )
+		imsave( os.path.join( outpath, 'cell_'+channel+'_4.tif' ), np.array(movie[1]) )
 
 plt.show()
 

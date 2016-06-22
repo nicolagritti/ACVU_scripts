@@ -71,6 +71,7 @@ class GUI(QtGui.QWidget):
 		tpLbl = QtGui.QLabel('Relative Tp:')
 		slLbl = QtGui.QLabel('Slice:')
 		fNameLbl = QtGui.QLabel('File name:')
+		zoomLbl = QtGui.QLabel('Zoom (imgPxl):')
 
 		self.tp = QtGui.QSpinBox(self)
 		self.tp.setValue(-5)
@@ -81,6 +82,12 @@ class GUI(QtGui.QWidget):
 		self.sl.setMaximum(100000)
 
 		self.fName = QtGui.QLabel('')
+
+		self.zoom = QtGui.QSpinBox(self)
+		self.zoom.setValue(50)
+		self.zoom.setMinimum(10)
+		self.zoom.setMaximum(150)
+		self.zoom.setSingleStep(10)
 
 		self._488nmBtn = QtGui.QRadioButton('488nm')
 		self._561nmBtn = QtGui.QRadioButton('561nm')
@@ -122,9 +129,11 @@ class GUI(QtGui.QWidget):
 		Col1.addWidget(self.sl, 1, 1)#, 1, 1, Qt.AlignTop)
 		Col1.addWidget(fNameLbl, 2, 0)
 		Col1.addWidget(self.fName, 2, 1)
-		Col1.addWidget(self._488nmBtn, 3, 0 )
-		Col1.addWidget(self._561nmBtn, 4, 0 )
-		Col1.addWidget(self.CoolLEDBtn, 5, 0 )
+		Col1.addWidget(zoomLbl, 3, 0)
+		Col1.addWidget(self.zoom, 3, 1)
+		Col1.addWidget(self._488nmBtn, 4, 0 )
+		Col1.addWidget(self._561nmBtn, 5, 0 )
+		Col1.addWidget(self.CoolLEDBtn, 6, 0 )
 
 		Col2.addWidget(self.sld1)
 		Col2.addWidget(self.sld2)
@@ -142,6 +151,7 @@ class GUI(QtGui.QWidget):
 
 		self.tp.valueChanged.connect(self.loadNewStack)
 		self.sl.valueChanged.connect(self.updateAllCanvas)
+		self.zoom.valueChanged.connect(self.changeZoom)
 		self.sld1.valueChanged.connect(self.updateBC)
 		self.sld2.valueChanged.connect(self.updateBC)
 
@@ -194,7 +204,8 @@ class GUI(QtGui.QWidget):
 		self.setWindowTitle('Outline Cells - ' + self.pathDial)
 
 		### give error message if there is no CoolLED movie in the selected folder
-		if not os.path.isfile( os.path.join( self.pathDial, 'CoolLED_movie.tif' ) ):
+		flist = glob.glob( self.pathDial + '\\*_movie.tif' )
+		if len(flist)==0:#not os.path.isfile( os.path.join( self.pathDial, '*_movie.tif' ) ):
 			QtGui.QMessageBox.about(self,'Warning!','There is no movie in this folder! Create a movie first!')
 			return
 
@@ -223,13 +234,14 @@ class GUI(QtGui.QWidget):
 			if os.path.isfile( os.path.join( self.pathDial, c + '_movie.tif' ) ):
 
 				self.channels.append(c)
-		self.currentChannel = 'CoolLED'
+		print(self.channels)
+		self.currentChannel = self.channels[0]
 
 		### detect size of the cropped images
 		tp = first_tidx_pos_all_cells( self.cellPosDF )
 		self.prevtp = tp-1
 		tRow = self.timesDF.ix[ self.timesDF.tidxRel == tp ].squeeze()
-		fileName = os.path.join( self.pathDial, tRow.fName + 'CoolLED.tif')
+		fileName = os.path.join( self.pathDial, tRow.fName + self.currentChannel + '.tif')
 		firststack = load_stack( fileName )
 		self.cropsize = firststack.shape[1]
 		self.nslices = firststack.shape[0]
@@ -239,7 +251,7 @@ class GUI(QtGui.QWidget):
 		self.initializeCanvas2()
 
 		### extract current cells already labeled
-		self.currentCells = extract_current_cell_out( self.cellPosDF, self.cellOutDF, self.tp.value() )
+		self.currentCells = extract_current_cell_out( self.cellPosDF, self.cellOutDF, self.tp.value(), self.zoom.value() )
 		self.analyzedCell = '---'
 
 		### update the text of the fileName
@@ -254,7 +266,12 @@ class GUI(QtGui.QWidget):
 
 		self.tp.setValue( tp )
 
-		self.CoolLEDBtn.setChecked(True)    # this uppdates the canvases once more
+		if self.currentChannel == 'CoolLED':
+			self.CoolLEDBtn.setChecked(True)    # this uppdates the canvas1 once more
+		elif self.currentChannel == '561nm':
+			self._561nmBtn.setChecked(True)    # this uppdates the canvas1 once more
+		elif self.currentChannel == '488nm':
+			self._488nmBtn.setChecked(True)    # this uppdates the canvas1 once more
 
 		# self.pathDial.show()
 		self.setFocus()
@@ -298,11 +315,12 @@ class GUI(QtGui.QWidget):
 				self.stacks[ch] = prevmax * np.ones((self.nslices,self.cropsize,self.cropsize))
 
 		### extract current cells already labeled
-		self.currentCells = extract_current_cell_out( self.cellPosDF, self.cellOutDF, self.tp.value() )
+		self.currentCells = extract_current_cell_out( self.cellPosDF, self.cellOutDF, self.tp.value(), self.zoom.value() )
 		# print(self.currentCells)
 
 		# if there are cells labeled and if the previously currently analyzed cell is present, set it as the currently labeled cell and select the right slice
 		if len(self.currentCells) > 0:
+			print(self.currentCells)
 			print('cells detected')
 
 			### update currently analyzed cell
@@ -331,38 +349,51 @@ class GUI(QtGui.QWidget):
 	def updateAllCanvas(self):
 		self.updateCanvas1()
 		self.updateCanvas2()
-        
+	    
 	def radio488Clicked(self, enabled):
-		print('radio 488 clicked')
+		# print('radio 488 clicked')
 
 		if enabled:
 			if '488nm' in self.channels:
 				self.currentChannel = '488nm'
 				self.setFocus()
-				self.updateAllCanvas()
+				self.updateCanvas1()
 			else:
-				self.CoolLEDBtn.setChecked(True)
+				if self.currentChannel == 'CoolLED':
+					self.CoolLEDBtn.setChecked(True)    # this uppdates the canvas1 once more
+				elif self.currentChannel == '561nm':
+					self._561nmBtn.setChecked(True)    # this uppdates the canvas1 once more
 				QtGui.QMessageBox.about(self, 'Warning', 'No 488nm channel!')
 
 	def radio561Clicked(self, enabled):
-	    print('radio 561 clicked')
-
-	    if enabled:
-	        if '561nm' in self.channels:
-	            self.currentChannel = '561nm'
-	            self.setFocus()
-	            self.updateAllCanvas()
-	        else:
-	            self.CoolLEDBtn.setChecked(True)
-	            QtGui.QMessageBox.about(self, 'Warning', 'No 561nm channel!')
-
-	def radioCoolLEDClicked(self, enabled):
-		print('radio LED clicked')
+	    # print('radio 561 clicked')
 
 		if enabled:
-			self.currentChannel = 'CoolLED'
-			self.setFocus()
-			self.updateAllCanvas()
+			if '561nm' in self.channels:
+				self.currentChannel = '561nm'
+				self.setFocus()
+				self.updateCanvas1()
+			else:
+				if self.currentChannel == 'CoolLED':
+					self.CoolLEDBtn.setChecked(True)    # this uppdates the canvas1 once more
+				elif self.currentChannel == '488nm':
+					self._488nmBtn.setChecked(True)    # this uppdates the canvas1 once more
+				QtGui.QMessageBox.about(self, 'Warning', 'No 561nm channel!')
+
+	def radioCoolLEDClicked(self, enabled):
+	    # print('radio LED clicked')
+
+		if enabled:
+			if 'CoolLED' in self.channels:
+				self.currentChannel = 'CoolLED'
+				self.setFocus()
+				self.updateCanvas1()
+			else:
+				if self.currentChannel == '561nm':
+					self._561nmBtn.setChecked(True)    # this uppdates the canvas1 once more
+				elif self.currentChannel == '488nm':
+					self._488nmBtn.setChecked(True)    # this uppdates the canvas1 once more
+				QtGui.QMessageBox.about(self, 'Warning', 'No CoolLED channel!')
 
 	def updateBC(self):
 		# change brightness and contrast
@@ -448,6 +479,11 @@ class GUI(QtGui.QWidget):
 	# UTILS
 	#-----------------------------------------------------------------------------------------------
 
+	def changeZoom( self ):
+		imgpxl = self.zoom.value()
+		self.currentCells.ix[ self.currentCells.cname == self.analyzedCell, 'imgPxl' ] = imgpxl
+		self.updateCanvas1()
+
 	def setBCslidersMinMax(self):
 		self.sld1.setMaximum( np.max( [ np.max(self.stacks[ch]) for ch in self.channels ] ) )
 		self.sld1.setMinimum(0)
@@ -464,7 +500,7 @@ class GUI(QtGui.QWidget):
 
 		# plot the first blank image with the right size
 		self.ax1.cla()
-		self.imgplot1 = self.ax1.imshow( np.zeros((50,50)), cmap = 'gray', interpolation = 'nearest' )
+		self.imgplot1 = self.ax1.imshow( np.zeros((1000,1000)), cmap = 'gray', interpolation = 'nearest' )
 
 		# remove the white borders
 		self.ax1.autoscale(False)
@@ -492,17 +528,25 @@ class GUI(QtGui.QWidget):
 			self.ax1.lines.remove(points)
 		self.plot_c1 = []
 
+
 		# if no cells labeled, leave the image blank
 		if len( self.currentCells ) == 0:
-			self.imgplot1.set_data( np.ones((50,50)) )
+			self.imgplot1.set_data( np.ones((self.zoom.value(),self.zoom.value())) )
 			self.canvas1.draw()
 			return
+
+		# detect and update zoom size
+		imgpxl = self.zoom.value()
+		if not np.isnan( self.currentCells.ix[ self.currentCells.cname == self.analyzedCell, 'imgPxl' ].values[0] ):
+			imgpxl = self.currentCells.ix[ self.currentCells.cname == self.analyzedCell, 'imgPxl' ].values[0]
+			self.zoom.setValue( imgpxl )
+		else:
+			self.currentCells.ix[ self.currentCells.cname == self.analyzedCell, 'imgPxl' ] = imgpxl
 
 		# extract current cell data
 		pos = extract_3Dpos( self.currentCells.ix[ self.currentCells.cname == self.analyzedCell ].squeeze() )
 
 		# plot the image
-		imgpxl = 50
 		self.imgplot1.set_data( self.stacks[self.currentChannel][self.sl.value(),pos[1]-imgpxl/2:pos[1]+imgpxl/2+1,pos[0]-imgpxl/2:pos[0]+imgpxl/2+1] )
 
 		# change brightness and contrast
@@ -510,7 +554,7 @@ class GUI(QtGui.QWidget):
 
 		# print cell name
 		if pos[2] == self.sl.value():
-			self.text_c1.append( self.ax1.text( 1, 2, self.analyzedCell, color='yellow', size='medium', alpha=.8,
+			self.text_c1.append( self.ax1.text( 10, 50, self.analyzedCell, color='yellow', size='medium', alpha=.8,
 					rotation=0, fontsize = 20 ) )
 
 		### draw outline

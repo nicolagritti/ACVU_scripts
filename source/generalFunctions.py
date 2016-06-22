@@ -78,18 +78,18 @@ def crop_image( imgs, c, size ):
         cropstack = np.zeros( ( imgs.shape[0], size, size ) )
 
         cropstack[ : , 
-                    -np.min( [ c[1]-size/2, 0 ] ) : size-np.max( [ c[1]+size/2-dim[1]+1, 0 ] ) , 
-                    -np.min( [ c[0]-size/2, 0 ] ) : size-np.max( [ c[0]+size/2-dim[2]+1, 0 ] ) ] = imgs[ :,
-                    np.max( [ c[1]-size/2, 0 ] ) : np.min( [ c[1]+size/2, dim[1]-1 ] ) , 
-                    np.max( [ c[0]-size/2, 0 ] ) : np.min( [ c[0]+size/2, dim[2]-1 ] ) ]
+                    -np.min( [ c[1]-size/2, 0 ] ) : size-np.max( [ c[1]+size/2-dim[2]+1, 0 ] ) , 
+                    -np.min( [ c[0]-size/2, 0 ] ) : size-np.max( [ c[0]+size/2-dim[1]+1, 0 ] ) ] = imgs[ :,
+                    np.max( [ c[1]-size/2, 0 ] ) : np.min( [ c[1]+size/2, dim[2]-1 ] ) , 
+                    np.max( [ c[0]-size/2, 0 ] ) : np.min( [ c[0]+size/2, dim[1]-1 ] ) ]
     if len(imgs.shape) == 2:
         cropstack = np.zeros( ( size, size ) )
 
         cropstack[
-                    -np.min( [ c[1]-size/2, 0 ] ) : size-np.max( [ c[1]+size/2-dim[0]+1, 0 ] ) , 
-                    -np.min( [ c[0]-size/2, 0 ] ) : size-np.max( [ c[0]+size/2-dim[1]+1, 0 ] ) ] = imgs[
-                    np.max( [ c[1]-size/2, 0 ] ) : np.min( [ c[1]+size/2, dim[0]-1 ] ) , 
-                    np.max( [ c[0]-size/2, 0 ] ) : np.min( [ c[0]+size/2, dim[1]-1 ] ) ]
+                    -np.min( [ c[1]-size/2, 0 ] ) : size-np.max( [ c[1]+size/2-dim[1]+1, 0 ] ) , 
+                    -np.min( [ c[0]-size/2, 0 ] ) : size-np.max( [ c[0]+size/2-dim[0]+1, 0 ] ) ] = imgs[
+                    np.max( [ c[1]-size/2, 0 ] ) : np.min( [ c[1]+size/2, dim[1]-1 ] ) , 
+                    np.max( [ c[0]-size/2, 0 ] ) : np.min( [ c[0]+size/2, dim[0]-1 ] ) ]
 
     return cropstack
 
@@ -406,7 +406,8 @@ def create_cell_out( tDF, cNames ):
 
     singleCell = pd.DataFrame( { 'tidx': tDF.tidxRel,
             'Xout': np.nan,
-            'Yout': np.nan } )
+            'Yout': np.nan,
+            'imgPxl': np.nan } )
 
     singleCell.Xout = singleCell.Xout.astype(object)
     singleCell.Yout = singleCell.Yout.astype(object)
@@ -419,13 +420,14 @@ def create_cell_out( tDF, cNames ):
 
     return cellOutDF
 
-def extract_current_cell_out( dict_pos, dict_out, tp ):
+def extract_current_cell_out( dict_pos, dict_out, tp, imgpxl=np.nan ):
 
     cellsDF = extract_current_cell_pos( dict_pos, tp )
 
     if len(cellsDF) > 0:
         cellsDF.ix[:,'Xout'] = np.nan
         cellsDF.ix[:,'Yout'] = np.nan
+        cellsDF.ix[:,'imgPxl'] = np.nan
 
         cellsDF.Xout = cellsDF.Xout.astype(object)
         cellsDF.Yout = cellsDF.Yout.astype(object)
@@ -436,6 +438,11 @@ def extract_current_cell_out( dict_pos, dict_out, tp ):
 
             cellsDF.Xout.values[ idx ] = outline[:,0]
             cellsDF.Yout.values[ idx ] = outline[:,1]
+
+            if not np.isnan(dict_out[ row.cname ].ix[ dict_out[ row.cname ].tidx == tp, 'imgPxl' ].values[0]):
+                cellsDF.imgPxl.values[idx] = dict_out[ row.cname ].ix[ dict_out[ row.cname ].tidx == tp, 'imgPxl' ].values[0]
+            else:
+                cellsDF.imgPxl.values[idx] = imgpxl
     # print(cellsDF)
 
     return cellsDF
@@ -452,6 +459,7 @@ def update_cell_out_DF( currentCells, cellOutDF, tp ):
 
         newCell.Xout.values[index] = [ np.array( [ np.nan ] ) ]
         newCell.Yout.values[index] = [ np.array( [ np.nan ] ) ]
+        newCell.imgPxl.values[index] = np.nan
 
         newCellOutDF[ cname ] = newCell
 
@@ -462,6 +470,7 @@ def update_cell_out_DF( currentCells, cellOutDF, tp ):
 
         newCellOutDF[ cell.cname ].Xout.values[index] = [ pos[:,0] ]
         newCellOutDF[ cell.cname ].Yout.values[index] = [ pos[:,1] ]
+        newCellOutDF[ cell.cname ].imgPxl.values[index] = [ cell.imgPxl ]
 
     return newCellOutDF
 
@@ -496,6 +505,7 @@ def flat_field_correction( imgs, darkField, flatField, gp ):
     den = np.clip( flatF.astype(np.float) - darkF.astype(np.float), 0, None )
 
     return ( medianCorrection * num / den ).astype(np.uint16)
+
 
 def extract_current_cell_fluo( dict_pos, dict_out, dict_fluo, tp ):
 
@@ -588,13 +598,37 @@ def calculate_fluo_intensity_bckg( img, imgpxl, center ):
 
     return np.sum( img ) / size
 
-def update_current_cell_fluo( currentCells, cell, channel, drift, signal ):
+def calculate_area( img, center, outline ):
 
+    imgpxl = img.shape[0]
+
+    vertices = np.array( [ center[0] + np.append(outline[:,0],outline[0,0]), center[1] + np.append(outline[:,1],outline[0,1]) ] ).T
+
+    p = Path(vertices)
+    
+    # create the mask (image full of 0 and 1, the 1s are wherethe cell is)
+    points = [ (i,j) for i in np.arange(imgpxl) for j in np.arange(imgpxl) ]
+    mask = p.contains_points(points).reshape(imgpxl,imgpxl).T
+
+    area = np.sum( mask )
+
+    return area
+
+def update_current_cell_fluo( currentCells, cell, channel, drift, _signal ):
+
+    cell._signal = _signal
+    # print(currentCells)
     newCurrentCells = currentCells.copy()
+    # print(newCurrentCells.ix[ newCurrentCells.cname == cell.cname, 'X' + channel ])
+    # print(cell.X,cell.X.dtype)
+    # print(drift[0],drift.dtype)
+    # print(newCurrentCells.ix[ newCurrentCells.cname == cell.cname, '_' + channel ])
+    # print(cell._signal,cell._signal.dtype)
 
-    newCurrentCells.ix[ newCurrentCells.cname == cell.cname, '_' + channel ] = signal
-    newCurrentCells.ix[ newCurrentCells.cname == cell.cname, 'X' + channel ] = int( cell.X + drift[0] )
-    newCurrentCells.ix[ newCurrentCells.cname == cell.cname, 'Y' + channel ] = int( cell.Y + drift[1] )
+    newCurrentCells.ix[ newCurrentCells.cname == cell.cname, 'X' + channel ] = cell.X + drift[0]
+    newCurrentCells.ix[ newCurrentCells.cname == cell.cname, 'Y' + channel ] = cell.Y + drift[1]
+    newCurrentCells.ix[ newCurrentCells.cname == cell.cname, '_' + channel ] = [cell._signal]   ### MISTERY: WHY THE FUCKING SQUARED BRACKETS??????
+    # print(newCurrentCells)
 
     return newCurrentCells
 
